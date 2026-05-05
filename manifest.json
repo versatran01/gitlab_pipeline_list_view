@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "description": "View GitLab pipeline jobs as a list grouped by stage instead of the default graph.",
   "permissions": ["storage"],
-  "host_permissions": ["*://*/*"],
   "content_scripts": [
     {
       "matches": ["*://*/*/-/pipelines/*"],
