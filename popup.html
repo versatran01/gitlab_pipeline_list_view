@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GitLab Pipeline List View</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 280px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: #303030;
+      background: #fff;
+    }
+
+    h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #303030;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo { font-size: 18px; }
+
+    p {
+      font-size: 12px;
+      color: #6a737d;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #e1e4e8;
+      margin: 14px 0;
+    }
+
+    .setting {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .setting input[type="checkbox"] {
+      margin-top: 2px;
+      cursor: pointer;
+      accent-color: #1f75cb;
+      flex-shrink: 0;
+    }
+
+    .setting label {
+      cursor: pointer;
+      line-height: 1.4;
+    }
+
+    .setting label strong {
+      display: block;
+      font-size: 13px;
+      color: #303030;
+    }
+
+    .setting label span {
+      font-size: 11px;
+      color: #6a737d;
+    }
+
+    .tip {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: #f6f8fa;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #444d56;
+      line-height: 1.5;
+    }
+
+    .tip strong { color: #303030; }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #22272e; color: #cdd9e5; }
+      h1 { color: #cdd9e5; }
+      p { color: #768390; }
+      .divider { border-color: #373e47; }
+      .setting label strong { color: #cdd9e5; }
+      .setting label span { color: #768390; }
+      .tip { background: #1c2128; border-color: #373e47; color: #adbac7; }
+      .tip strong { color: #cdd9e5; }
+    }
+  </style>
+</head>
+<body>
+  <h1><span class="logo">☰</span> Pipeline List View</h1>
+  <p>Replaces the GitLab pipeline graph with a sortable job list, grouped by stage.</p>
+
+  <hr class="divider">
+
+  <div class="setting">
+    <input type="checkbox" id="auto-switch">
+    <label for="auto-switch">
+      <strong>Auto-switch to list view</strong>
+      <span>Automatically activate list view whenever you open a pipeline page.</span>
+    </label>
+  </div>
+
+  <div class="tip">
+    Open any GitLab pipeline page and click the
+    <strong>☰ List View</strong> button near the pipeline header.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

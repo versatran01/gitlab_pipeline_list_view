@@ -1,0 +1,586 @@
+/* ── Toggle button ──────────────────────────────────────────────────────── */
+
+#glpv-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #1f75cb;
+  background: transparent;
+  border: 1px solid #1f75cb;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+#glpv-toggle:hover {
+  background: #e9f0f9;
+  color: #1068bf;
+  border-color: #1068bf;
+}
+
+#glpv-toggle.glpv-btn-active {
+  background: #1f75cb;
+  color: #fff;
+  border-color: #1068bf;
+}
+
+#glpv-toggle.glpv-btn-active:hover {
+  background: #1068bf;
+}
+
+/* ── Loading / error states ─────────────────────────────────────────────── */
+
+.glpv-loading {
+  padding: 28px;
+  text-align: center;
+  color: #6a737d;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.glpv-error {
+  padding: 14px 18px;
+  margin: 16px 0;
+  background: #fef0f0;
+  border: 1px solid #f5aaaa;
+  border-radius: 6px;
+  color: #c0392b;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ── Root container ─────────────────────────────────────────────────────── */
+
+#glpv-root {
+  margin: 16px 0 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #303030;
+}
+
+/* Shared container style for root + nested pipeline lists */
+.glpv-pipeline-list {
+  border: 1px solid #dde0e5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── Summary bar ────────────────────────────────────────────────────────── */
+
+.glpv-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #dde0e5;
+}
+
+.glpv-summary-ref {
+  font-weight: 600;
+  font-size: 13px;
+  color: #303030;
+}
+
+.glpv-summary-meta {
+  color: #6a737d;
+  font-size: 12px;
+}
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+
+.glpv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.glpv-icon { font-style: normal; }
+
+.glpv-badge.glpv-status-success  { background: #d4f1e4; color: #1a7a3e; }
+.glpv-badge.glpv-status-failed   { background: #fde0db; color: #b22518; }
+.glpv-badge.glpv-status-running  { background: #ddeeff; color: #1357a6; }
+.glpv-badge.glpv-status-pending  { background: #fef3dc; color: #b36800; }
+.glpv-badge.glpv-status-canceled,
+.glpv-badge.glpv-status-canceling { background: #eeeff0; color: #555d69; }
+.glpv-badge.glpv-status-skipped  { background: #eeeff0; color: #7a8591; }
+.glpv-badge.glpv-status-manual   { background: #eeeff0; color: #303030; }
+.glpv-badge.glpv-status-created,
+.glpv-badge.glpv-status-scheduled,
+.glpv-badge.glpv-status-waiting_for_resource,
+.glpv-badge.glpv-status-preparing { background: #eeeff0; color: #7a8591; }
+
+/* ── Expand All / Collapse All button (in summary bar) ──────────────────── */
+
+.glpv-expand-all-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f75cb;
+  background: transparent;
+  border: 1px solid #c4d5ec;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+}
+
+.glpv-expand-all-btn:hover {
+  background: #e9f0f9;
+  border-color: #1f75cb;
+}
+
+/* ── Stage section ──────────────────────────────────────────────────────── */
+
+.glpv-stage {
+  border-top: 1px solid #dde0e5;
+}
+
+.glpv-stage:first-of-type {
+  border-top: none;
+}
+
+.glpv-stage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #dde0e5;
+}
+
+.glpv-stage-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.glpv-stage-dot.glpv-status-success  { background: #1aaa55; }
+.glpv-stage-dot.glpv-status-failed   { background: #db3b21; }
+.glpv-stage-dot.glpv-status-running  { background: #1f75cb; }
+.glpv-stage-dot.glpv-status-pending  { background: #fc9403; }
+.glpv-stage-dot.glpv-status-canceled,
+.glpv-stage-dot.glpv-status-canceling { background: #9ea7b8; }
+.glpv-stage-dot.glpv-status-skipped  { background: #9ea7b8; }
+.glpv-stage-dot.glpv-status-manual   { background: #6a737d; }
+.glpv-stage-dot.glpv-status-created,
+.glpv-stage-dot.glpv-status-scheduled,
+.glpv-stage-dot.glpv-status-waiting_for_resource,
+.glpv-stage-dot.glpv-status-preparing { background: #c4c9d0; }
+
+.glpv-stage-name {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #444d56;
+}
+
+.glpv-stage-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: #6a737d;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Jobs table ─────────────────────────────────────────────────────────── */
+
+.glpv-jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+}
+
+.glpv-jobs-table thead th {
+  padding: 5px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #6a737d;
+  background: #f9fafb;
+  border-bottom: 1px solid #dde0e5;
+}
+
+.glpv-jobs-table tbody tr {
+  border-bottom: 1px solid #f0f1f3;
+  transition: background 0.08s;
+}
+
+.glpv-jobs-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.glpv-jobs-table tbody tr:hover {
+  background: #f6f8fa;
+}
+
+.glpv-jobs-table td {
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+.glpv-col-status   { width: 36px; text-align: center; padding-left: 10px; padding-right: 4px; }
+.glpv-col-name     { min-width: 200px; }
+.glpv-col-started  { width: 145px; color: #6a737d; font-size: 12px; }
+.glpv-col-duration { width: 90px; font-variant-numeric: tabular-nums; font-size: 12px; }
+.glpv-col-runner   { width: 180px; color: #6a737d; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+
+/* ── Status icon ────────────────────────────────────────────────────────── */
+
+.glpv-job-icon {
+  display: inline-block;
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.glpv-job-icon.glpv-status-success  { color: #1aaa55; }
+.glpv-job-icon.glpv-status-failed   { color: #db3b21; }
+.glpv-job-icon.glpv-status-running  { color: #1f75cb; display: inline-block; animation: glpv-spin 1.2s linear infinite; }
+.glpv-job-icon.glpv-status-pending  { color: #fc9403; }
+.glpv-job-icon.glpv-status-canceled,
+.glpv-job-icon.glpv-status-canceling { color: #9ea7b8; }
+.glpv-job-icon.glpv-status-skipped  { color: #9ea7b8; }
+.glpv-job-icon.glpv-status-manual   { color: #5b6068; }
+.glpv-job-icon.glpv-status-created,
+.glpv-job-icon.glpv-status-scheduled,
+.glpv-job-icon.glpv-status-waiting_for_resource,
+.glpv-job-icon.glpv-status-preparing { color: #9ea7b8; }
+
+@keyframes glpv-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Row-level highlights ────────────────────────────────────────────────── */
+
+.glpv-job-row.glpv-status-running { background: rgba(31, 117, 203, 0.03); }
+.glpv-job-row.glpv-status-failed  { background: rgba(219, 59, 33, 0.03); }
+
+/* ── Job name link ──────────────────────────────────────────────────────── */
+
+.glpv-job-link {
+  color: #303030;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.glpv-job-link:hover {
+  color: #1f75cb;
+  text-decoration: underline;
+}
+
+/* ── Optional badge ─────────────────────────────────────────────────────── */
+
+.glpv-badge-optional {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #6a737d;
+  border: 1px solid #c4c9d0;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+
+/* ── Play button (manual jobs) ──────────────────────────────────────────── */
+
+.glpv-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 10px;
+  color: #5b6068;
+  background: transparent;
+  border: 1px solid #c4c9d0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  vertical-align: middle;
+}
+
+.glpv-play-btn:hover {
+  color: #1f75cb;
+  background: #e9f0f9;
+  border-color: #1f75cb;
+}
+
+.glpv-play-btn--loading {
+  color: #1f75cb;
+  border-color: #1f75cb;
+  animation: glpv-spin 0.8s linear infinite;
+}
+
+.glpv-play-btn--error {
+  color: #db3b21;
+  border-color: #db3b21;
+  background: #fde0db;
+}
+
+/* ── Expand button (on bridge/trigger job rows) ──────────────────────────── */
+
+.glpv-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  padding: 0;
+  color: #6a737d;
+  background: transparent;
+  border: 1px solid #c4c9d0;
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.glpv-expand-btn::before {
+  content: '▶';
+  font-size: 7px;
+  display: block;
+  transition: transform 0.15s ease;
+}
+
+.glpv-expand-btn:hover {
+  background: #f0f1f3;
+  border-color: #9ea7b8;
+  color: #303030;
+}
+
+.glpv-expand-btn--open::before {
+  transform: rotate(90deg);
+}
+
+
+/* ── Inline downstream status badge: "→ [passed] #12" ───────────────────── */
+
+.glpv-ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  font-size: 12px;
+  color: #6a737d;
+  vertical-align: middle;
+}
+
+.glpv-ds-badge .glpv-badge {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.glpv-ds-link {
+  color: #6a737d;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.glpv-ds-link:hover {
+  color: #1f75cb;
+  text-decoration: underline;
+}
+
+/* ── Downstream expand row ──────────────────────────────────────────────── */
+
+.glpv-ds-row:hover {
+  background: transparent !important;
+}
+
+.glpv-ds-row > td {
+  padding-top: 0 !important;
+  padding-bottom: 10px !important;
+}
+
+/* Left accent border wrapping the nested pipeline */
+.glpv-ds-content {
+  border-left: 3px solid #dde0e5;
+  margin-left: 4px;
+  padding-left: 12px;
+}
+
+/* ── Downstream pipeline header ─────────────────────────────────────────── */
+
+.glpv-ds-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0 8px;
+}
+
+.glpv-ds-proj-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: #303030;
+  text-decoration: none;
+}
+
+.glpv-ds-proj-link:hover {
+  color: #1f75cb;
+  text-decoration: underline;
+}
+
+.glpv-ds-meta {
+  font-size: 12px;
+  color: #6a737d;
+}
+
+/* ── Nested pipeline list (compact) ─────────────────────────────────────── */
+
+.glpv-ds-content .glpv-pipeline-list {
+  border-radius: 4px;
+  border-color: #e1e4e8;
+}
+
+.glpv-ds-content .glpv-stage-header  { padding: 5px 12px; }
+.glpv-ds-content .glpv-stage-name    { font-size: 11px; }
+.glpv-ds-content .glpv-jobs-table td { padding: 5px 10px; font-size: 12px; }
+/* Hide column headers in nested tables — saves vertical space */
+.glpv-ds-content .glpv-jobs-table thead { display: none; }
+
+/* ── Downstream loading / error ─────────────────────────────────────────── */
+
+.glpv-ds-loading {
+  padding: 10px 0 4px;
+  font-size: 12px;
+  color: #6a737d;
+}
+
+.glpv-ds-error {
+  padding: 8px 12px;
+  margin-top: 4px;
+  background: #fef0f0;
+  border: 1px solid #f5aaaa;
+  border-radius: 4px;
+  color: #c0392b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ── Dark mode: system ──────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  #glpv-root            { color: #cdd9e5; }
+  .glpv-pipeline-list   { border-color: #373e47; }
+  .glpv-summary         { background: #1c2128; border-color: #373e47; }
+  .glpv-summary-ref     { color: #cdd9e5; }
+  .glpv-summary-meta    { color: #768390; }
+  .glpv-stage           { border-color: #373e47; }
+  .glpv-stage-header    { background: #1c2128; border-color: #373e47; }
+  .glpv-stage-name      { color: #adbac7; }
+  .glpv-stage-count     { color: #768390; }
+  .glpv-jobs-table      { background: #22272e; }
+  .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
+  .glpv-jobs-table tbody tr { border-color: #2d333b; }
+  .glpv-jobs-table tbody tr:hover { background: #2d333b; }
+  .glpv-col-started, .glpv-col-runner { color: #768390; }
+  .glpv-job-link        { color: #cdd9e5; }
+  .glpv-job-link:hover  { color: #58a6ff; }
+  .glpv-badge-optional  { color: #768390; border-color: #444c56; }
+  .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+  .glpv-loading         { color: #768390; }
+  #glpv-toggle          { color: #58a6ff; border-color: #388bfd; }
+  #glpv-toggle:hover    { background: #1c2d55; }
+  #glpv-toggle.glpv-btn-active       { background: #1f6feb; border-color: #388bfd; color: #fff; }
+  #glpv-toggle.glpv-btn-active:hover { background: #1a60d4; }
+  /* Play button */
+  .glpv-play-btn        { color: #768390; border-color: #444c56; }
+  .glpv-play-btn:hover  { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
+  .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
+  /* Expand All button */
+  .glpv-expand-all-btn  { color: #58a6ff; border-color: #2d4a7a; }
+  .glpv-expand-all-btn:hover { background: #1c2d55; border-color: #58a6ff; }
+  /* Expand & downstream */
+  .glpv-expand-btn      { color: #768390; border-color: #444c56; }
+  .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }
+  .glpv-ds-badge        { color: #768390; }
+  .glpv-ds-link         { color: #768390; }
+  .glpv-ds-link:hover   { color: #58a6ff; }
+  .glpv-ds-content      { border-color: #373e47; }
+  .glpv-ds-proj-link    { color: #cdd9e5; }
+  .glpv-ds-proj-link:hover { color: #58a6ff; }
+  .glpv-ds-meta         { color: #768390; }
+  .glpv-ds-loading      { color: #768390; }
+  .glpv-ds-error        { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+  .glpv-ds-content .glpv-pipeline-list { border-color: #2d333b; }
+}
+
+/* ── Dark mode: GitLab native ───────────────────────────────────────────── */
+
+html.gl-dark #glpv-root            { color: #cdd9e5; }
+html.gl-dark .glpv-pipeline-list   { border-color: #373e47; }
+html.gl-dark .glpv-summary         { background: #1c2128; border-color: #373e47; }
+html.gl-dark .glpv-summary-ref     { color: #cdd9e5; }
+html.gl-dark .glpv-summary-meta    { color: #768390; }
+html.gl-dark .glpv-stage           { border-color: #373e47; }
+html.gl-dark .glpv-stage-header    { background: #1c2128; border-color: #373e47; }
+html.gl-dark .glpv-stage-name      { color: #adbac7; }
+html.gl-dark .glpv-stage-count     { color: #768390; }
+html.gl-dark .glpv-jobs-table      { background: #22272e; }
+html.gl-dark .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
+html.gl-dark .glpv-jobs-table tbody tr { border-color: #2d333b; }
+html.gl-dark .glpv-jobs-table tbody tr:hover { background: #2d333b; }
+html.gl-dark .glpv-col-started,
+html.gl-dark .glpv-col-runner      { color: #768390; }
+html.gl-dark .glpv-job-link        { color: #cdd9e5; }
+html.gl-dark .glpv-job-link:hover  { color: #58a6ff; }
+html.gl-dark .glpv-badge-optional  { color: #768390; border-color: #444c56; }
+html.gl-dark .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+html.gl-dark .glpv-loading         { color: #768390; }
+html.gl-dark #glpv-toggle          { color: #58a6ff; border-color: #388bfd; }
+html.gl-dark #glpv-toggle:hover    { background: #1c2d55; }
+html.gl-dark #glpv-toggle.glpv-btn-active       { background: #1f6feb; border-color: #388bfd; color: #fff; }
+html.gl-dark #glpv-toggle.glpv-btn-active:hover { background: #1a60d4; }
+/* Play button */
+html.gl-dark .glpv-play-btn        { color: #768390; border-color: #444c56; }
+html.gl-dark .glpv-play-btn:hover  { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
+html.gl-dark .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
+/* Expand All button */
+html.gl-dark .glpv-expand-all-btn  { color: #58a6ff; border-color: #2d4a7a; }
+html.gl-dark .glpv-expand-all-btn:hover { background: #1c2d55; border-color: #58a6ff; }
+/* Expand & downstream */
+html.gl-dark .glpv-expand-btn      { color: #768390; border-color: #444c56; }
+html.gl-dark .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }
+html.gl-dark .glpv-ds-badge        { color: #768390; }
+html.gl-dark .glpv-ds-link         { color: #768390; }
+html.gl-dark .glpv-ds-link:hover   { color: #58a6ff; }
+html.gl-dark .glpv-ds-content      { border-color: #373e47; }
+html.gl-dark .glpv-ds-proj-link    { color: #cdd9e5; }
+html.gl-dark .glpv-ds-proj-link:hover { color: #58a6ff; }
+html.gl-dark .glpv-ds-meta         { color: #768390; }
+html.gl-dark .glpv-ds-loading      { color: #768390; }
+html.gl-dark .glpv-ds-error        { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+html.gl-dark .glpv-ds-content .glpv-pipeline-list { border-color: #2d333b; }

@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "GitLab Pipeline List View",
+  "version": "1.0.0",
+  "description": "View GitLab pipeline jobs as a list grouped by stage instead of the default graph.",
+  "permissions": ["storage"],
+  "host_permissions": ["*://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://*/*/-/pipelines/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GitLab Pipeline List View"
+  }
+}
