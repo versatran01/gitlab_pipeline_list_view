@@ -9,3 +9,7 @@ chrome.storage.local.get(STORAGE_KEY).then(result => {
 checkbox.addEventListener('change', () => {
   chrome.storage.local.set({ [STORAGE_KEY]: checkbox.checked });
 });
+
+document.getElementById('open-settings').addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
+});
