@@ -1,1 +1,0 @@
-# gitlab_pipeline_list_view

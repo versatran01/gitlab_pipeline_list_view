@@ -83,6 +83,22 @@
 
     .tip strong { color: #303030; }
 
+    .settings-link {
+      display: block;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #1f75cb;
+      text-align: right;
+      text-decoration: none;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      width: 100%;
+    }
+
+    .settings-link:hover { text-decoration: underline; }
+
     @media (prefers-color-scheme: dark) {
       body { background: #22272e; color: #cdd9e5; }
       h1 { color: #cdd9e5; }
@@ -92,6 +108,7 @@
       .setting label span { color: #768390; }
       .tip { background: #1c2128; border-color: #373e47; color: #adbac7; }
       .tip strong { color: #cdd9e5; }
+      .settings-link { color: #539bf5; }
     }
   </style>
 </head>
@@ -113,6 +130,8 @@
     Open any GitLab pipeline page and click the
     <strong>☰ List View</strong> button near the pipeline header.
   </div>
+
+  <button class="settings-link" id="open-settings">⚙ Manage GitLab instances…</button>
 
   <script src="popup.js"></script>
 </body>
