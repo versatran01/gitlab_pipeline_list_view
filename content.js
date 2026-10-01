@@ -43,6 +43,10 @@
   // re-fetching. Keyed by dsCacheKey, which changes when the downstream does.
   const dsCache = new Map();
 
+  // Stages the user collapsed/expanded by hand ("<pipeline id>:<stage>" →
+  // collapsed?). Survives refreshes; otherwise defaultCollapsed decides.
+  const stageOverrides = new Map();
+
   const state = {
     pipelineId: null,
     projectPath: null,
@@ -757,6 +761,20 @@
     return !!f.text.trim() || f.failedOnly;
   }
 
+  // When a pipeline has a failed stage, its fully passed stages start
+  // collapsed so the failure stands out. Takes and returns stage statuses
+  // → collapsed? in the same order.
+  function defaultCollapsed(statuses) {
+    const anyFailed = statuses.includes('failed');
+    return statuses.map(st => anyFailed && st === 'success');
+  }
+
+  function setStageCollapsed(stageEl, collapsed) {
+    stageEl.classList.toggle('glpv-stage--collapsed', collapsed);
+    stageEl.querySelector(':scope > .glpv-stage-header')
+      .setAttribute('aria-expanded', String(!collapsed));
+  }
+
   // `row` carries a job row's dataset: lowercase name, status and (for
   // trigger jobs) the downstream pipeline's status.
   function rowMatchesFilter(row, f) {
@@ -784,6 +802,8 @@
         if (show) stageVisible++;
       }
       stage.classList.toggle('glpv-filtered', stageVisible === 0);
+      // Matches inside a collapsed stage are shown while filtering.
+      stage.classList.toggle('glpv-stage--filter-open', filterActive(filter) && stageVisible > 0);
       visible += stageVisible;
     }
     return visible;
@@ -917,8 +937,11 @@
       root.appendChild(buildFilterBar(root));
     }
 
-    stagesMap.forEach((stageJobs, stageName) => {
-      const ss = stageStatus(stageJobs);
+    const stageStatuses = [...stagesMap.values()].map(stageStatus);
+    const collapsedByDefault = defaultCollapsed(stageStatuses);
+
+    [...stagesMap].forEach(([stageName, stageJobs], i) => {
+      const ss = stageStatuses[i];
       const sc = statusCfg(ss);
 
       const stageEl = document.createElement('div');
@@ -926,12 +949,29 @@
 
       const header = document.createElement('div');
       header.className = 'glpv-stage-header';
+      header.setAttribute('role', 'button');
+      header.tabIndex = 0;
+      header.title = 'Collapse/expand stage';
       header.innerHTML = `
+        <span class="glpv-stage-chevron" aria-hidden="true">▾</span>
         <span class="glpv-stage-dot glpv-status-${escHtml(ss)}" title="${escHtml(sc.label)}"></span>
         <span class="glpv-stage-name">${escHtml(stageName)}</span>
         <span class="glpv-stage-count">${stageJobs.length} job${stageJobs.length !== 1 ? 's' : ''}</span>
       `;
       stageEl.appendChild(header);
+
+      const overrideKey = `${pipeline.id}:${stageName}`;
+      const toggleStage = () => {
+        const collapsed = !stageEl.classList.contains('glpv-stage--collapsed');
+        stageOverrides.set(overrideKey, collapsed);
+        setStageCollapsed(stageEl, collapsed);
+      };
+      header.addEventListener('click', toggleStage);
+      header.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        toggleStage();
+      });
 
       const table = document.createElement('table');
       table.className = 'glpv-jobs-table';
@@ -953,6 +993,7 @@
 
       table.appendChild(tbody);
       stageEl.appendChild(table);
+      setStageCollapsed(stageEl, stageOverrides.get(overrideKey) ?? collapsedByDefault[i]);
       root.appendChild(stageEl);
     });
 
@@ -1197,6 +1238,7 @@
       formatDuration, formatFailureReason, retryDelay, latestAttempts,
       stageStatus, buildStageMap, rowMatchesFilter, filterActive,
       mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
+      defaultCollapsed,
     };
     return;
   }
@@ -1270,6 +1312,7 @@
   function cleanup() {
     expandAllActive = false;
     dsCache.clear();
+    stageOverrides.clear();
     Object.assign(filter, { text: '', failedOnly: false });
     clearTimeout(refresh.timer);
     clearInterval(refresh.ticker);

@@ -5,6 +5,7 @@ const {
   formatDuration, formatFailureReason, retryDelay, latestAttempts,
   stageStatus, buildStageMap, rowMatchesFilter, filterActive,
   mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
+  defaultCollapsed,
 } = require('../content.js');
 
 test('formatDuration', () => {
@@ -185,4 +186,12 @@ test('pipelineTiming', () => {
   assert.deepEqual(pipelineTiming({ status: 'success', duration: 61 }, now),
     { seconds: 61, prefix: '', live: false });
   assert.equal(pipelineTiming({ status: 'canceled', duration: null }, now), null);
+});
+
+test('defaultCollapsed collapses passed stages only when something failed', () => {
+  assert.deepEqual(defaultCollapsed(['success', 'success']), [false, false]);
+  assert.deepEqual(defaultCollapsed(['success', 'failed', 'skipped', 'success']),
+    [true, false, false, true]);
+  assert.deepEqual(defaultCollapsed(['success', 'running']), [false, false]);
+  assert.deepEqual(defaultCollapsed([]), []);
 });
