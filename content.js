@@ -211,18 +211,19 @@
     return res.json();
   }
 
-  // Play (`action` = 'play') or retry ('retry') a job. Uses project_id from
-  // the embedded pipeline object when available (most reliable), falls back
-  // to parsing the job's web_url.
+  // Play (`action` = 'play'), retry ('retry') or cancel ('cancel') a job.
+  // Uses project_id from the embedded pipeline object when available (most
+  // reliable), falls back to parsing the job's web_url.
   function jobAction(job, action) {
     const base = originOf(job.web_url);
     const proj = job.pipeline?.project_id ?? projectPathOf(job.web_url);
     return apiPost(`${projApiBase(base, proj)}/jobs/${job.id}/${action}`);
   }
 
-  // Retry every failed/canceled job of one pipeline (GitLab's "Retry" button).
-  function retryPipeline(baseUrl, proj, pipelineId) {
-    return apiPost(`${projApiBase(baseUrl, proj)}/pipelines/${pipelineId}/retry`);
+  // Retry every failed/canceled job of one pipeline (`action` = 'retry',
+  // GitLab's "Retry" button) or cancel it ('cancel').
+  function pipelineAction(baseUrl, proj, pipelineId, action) {
+    return apiPost(`${projApiBase(baseUrl, proj)}/pipelines/${pipelineId}/${action}`);
   }
 
   function setRowPending(tr) {
@@ -278,14 +279,23 @@
     });
   }
 
-  // "Retry" button at the end of a failed/canceled job's name cell. On
-  // success the row goes pending and the view refreshes to pick up the new
-  // attempt; on failure the button flashes red and can be clicked again.
-  function attachRetryBtn(nameCell, statusCell, job, tr) {
-    const btn = document.createElement('button');
-    btn.className = 'glpv-retry-btn';
-    btn.title = 'Retry this job';
-    btn.textContent = 'Retry';
+  // Job statuses that offer a Cancel button.
+  const CANCELABLE_JOB = new Set([
+    'created', 'waiting_for_resource', 'preparing', 'pending', 'running',
+  ]);
+
+  const ROW_ACTIONS = {
+    retry:  { label: 'Retry',  busy: 'Retrying…',  title: 'Retry this job' },
+    cancel: { label: 'Cancel', busy: 'Canceling…', title: 'Cancel this job' },
+  };
+
+  // "Retry" / "Cancel" button at the end of a job's name cell. On success
+  // the view refreshes to pick up the change (a retried row goes pending
+  // right away); on failure the button flashes red and can be clicked again.
+  function attachRowActionBtn(nameCell, statusCell, job, tr, action) {
+    const cfg = ROW_ACTIONS[action];
+    const btn = el('button', 'glpv-retry-btn', cfg.label);
+    btn.title = cfg.title;
     nameCell.appendChild(btn);
 
     btn.addEventListener('click', async e => {
@@ -293,61 +303,87 @@
       e.stopPropagation();
 
       btn.disabled = true;
-      btn.textContent = 'Retrying…';
+      btn.textContent = cfg.busy;
       try {
-        await jobAction(job, 'retry');
+        await jobAction(job, action);
         btn.remove();
-        statusCell.querySelector('.glpv-job-icon')?.replaceWith(pendingIcon());
-        setRowPending(tr);
+        if (action === 'retry') {
+          statusCell.querySelector('.glpv-job-icon')?.replaceWith(pendingIcon());
+          setRowPending(tr);
+        }
         requestRefresh(ACTION_REFRESH_MS);
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Retry';
+        btn.textContent = cfg.label;
         btn.classList.add('glpv-retry-btn--error');
-        btn.title = `Failed to retry: ${err.message}`;
+        btn.title = `Failed to ${action}: ${err.message}`;
         setTimeout(() => {
           btn.classList.remove('glpv-retry-btn--error');
-          btn.title = 'Retry this job';
+          btn.title = cfg.title;
         }, 4000);
-        console.error('[GitLab Pipeline List View] retry job failed:', err);
+        console.error(`[GitLab Pipeline List View] ${action} job failed:`, err);
       }
     });
   }
 
-  // "Retry failed" button for a whole pipeline (root summary bar or a
-  // downstream header). Only offered when the pipeline ended failed/canceled.
-  function makeRetryPipelineBtn(baseUrl, proj, pipeline) {
-    if (!['failed', 'canceled'].includes(pipeline.status)) return null;
-    const btn = document.createElement('button');
-    btn.className = 'glpv-action-btn';
-    btn.textContent = 'Retry failed';
-    btn.title = 'Retry all failed and canceled jobs in this pipeline';
+  const PIPELINE_ACTIONS = {
+    retry: {
+      label: 'Retry failed', busy: 'Retrying…', done: 'Retried ✓',
+      title: 'Retry all failed and canceled jobs in this pipeline',
+    },
+    cancel: {
+      label: 'Cancel', busy: 'Canceling…', done: 'Canceled ✓',
+      title: 'Cancel this pipeline',
+      confirm: 'Cancel this pipeline and all of its running jobs?',
+    },
+  };
 
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      btn.disabled = true;
-      btn.textContent = 'Retrying…';
-      try {
-        await retryPipeline(baseUrl, proj, pipeline.id);
-        btn.textContent = 'Retried ✓';
-        requestRefresh(ACTION_REFRESH_MS);
-      } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Retry failed';
-        btn.title = `Failed to retry: ${err.message}`;
-        btn.classList.add('glpv-action-btn--error');
-        console.error('[GitLab Pipeline List View] retry pipeline failed:', err);
-      }
+  // Pipeline-level buttons for the root summary bar or a downstream header:
+  // "Retry failed" once it ended failed/canceled, "Cancel" while it runs.
+  function makePipelineActionBtns(baseUrl, proj, pipeline) {
+    const actions = [];
+    if (['failed', 'canceled'].includes(pipeline.status)) actions.push('retry');
+    if (ACTIVE_STATUSES.has(pipeline.status) && pipeline.status !== 'canceling') {
+      actions.push('cancel');
+    }
+
+    return actions.map(action => {
+      const cfg = PIPELINE_ACTIONS[action];
+      const btn = el('button', 'glpv-action-btn', cfg.label);
+      btn.title = cfg.title;
+
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (cfg.confirm && !window.confirm(cfg.confirm)) return;
+        btn.disabled = true;
+        btn.textContent = cfg.busy;
+        try {
+          await pipelineAction(baseUrl, proj, pipeline.id, action);
+          btn.textContent = cfg.done;
+          requestRefresh(ACTION_REFRESH_MS);
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = cfg.label;
+          btn.title = `Failed to ${action}: ${err.message}`;
+          btn.classList.add('glpv-action-btn--error');
+          console.error(`[GitLab Pipeline List View] ${action} pipeline failed:`, err);
+        }
+      });
+      return btn;
     });
-    return btn;
   }
 
   function attachJobActions(tr, job) {
     const statusCell = tr.querySelector('.glpv-col-status');
+    const nameCell = tr.querySelector('.glpv-col-name');
     if (job.status === 'manual') {
       attachPlayBtn(statusCell, job, tr);
-    } else if (!job._isBridge && ['failed', 'canceled'].includes(job.status)) {
-      attachRetryBtn(tr.querySelector('.glpv-col-name'), statusCell, job, tr);
+    } else if (job._isBridge) {
+      // Bridges are retried/canceled through their downstream pipeline.
+    } else if (['failed', 'canceled'].includes(job.status)) {
+      attachRowActionBtn(nameCell, statusCell, job, tr, 'retry');
+    } else if (CANCELABLE_JOB.has(job.status)) {
+      attachRowActionBtn(nameCell, statusCell, job, tr, 'cancel');
     }
   }
 
@@ -449,37 +485,21 @@
           fetchAllBridges(dpBase, downstream.project_id, downstream.id),
         ]);
 
-        const pc = statusCfg(pipeline.status);
         const projPath = projectPathOf(downstream.web_url) || `Project ${downstream.project_id}`;
 
-        const header = document.createElement('div');
-        header.className = 'glpv-ds-header';
+        const header = el('div', 'glpv-ds-header');
 
-        const badge = document.createElement('span');
-        badge.className = `glpv-badge glpv-status-${pipeline.status}`;
-        const iconEl = document.createElement('span');
-        iconEl.className = 'glpv-icon';
-        iconEl.textContent = pc.icon;
-        badge.appendChild(iconEl);
-        badge.appendChild(document.createTextNode(pc.label));
-
-        const projLink = document.createElement('a');
+        const projLink = el('a', 'glpv-ds-proj-link', projPath);
         projLink.href = downstream.web_url;
-        projLink.className = 'glpv-ds-proj-link';
-        projLink.textContent = projPath;
 
-        const meta = document.createElement('span');
-        meta.className = 'glpv-ds-meta';
         let metaText = `Pipeline #${pipeline.id}`;
         if (pipeline.ref) metaText += ` · ${pipeline.ref}`;
         if (pipeline.duration) metaText += ` · ${formatDuration(pipeline.duration)}`;
-        meta.textContent = metaText;
 
-        header.appendChild(badge);
+        header.appendChild(statusBadge(pipeline.status));
         header.appendChild(projLink);
-        header.appendChild(meta);
-        const retryBtn = makeRetryPipelineBtn(dpBase, downstream.project_id, pipeline);
-        if (retryBtn) header.appendChild(retryBtn);
+        header.appendChild(el('span', 'glpv-ds-meta', metaText));
+        header.append(...makePipelineActionBtns(dpBase, downstream.project_id, pipeline));
 
         const nested = buildListView(pipeline, djobs, dbridges, depth + 1);
 
@@ -487,6 +507,7 @@
         contentDiv.innerHTML = '';
         contentDiv.appendChild(header);
         contentDiv.appendChild(nested);
+        applyFilter(btn.closest('#glpv-root'));
 
         // Re-open what was open before a refresh first, so it's loaded
         // before the refreshed view replaces the old one.
@@ -516,122 +537,193 @@
       setExpanded(btn.getAttribute('aria-expanded') !== 'true'));
   }
 
-  // ── Bridge job row (trigger job + optional expandable downstream) ─────────
+  // ── Job row (regular job or trigger job + expandable downstream) ─────────
 
-  function addBridgeRow(tbody, job, depth) {
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function statusBadge(status) {
+    const sc = statusCfg(status);
+    const badge = el('span', `glpv-badge glpv-status-${status}`);
+    badge.appendChild(el('span', 'glpv-icon', sc.icon));
+    badge.appendChild(document.createTextNode(sc.label));
+    return badge;
+  }
+
+  function addJobRow(tbody, job, depth) {
     const jc = statusCfg(job.status);
-    const dp = job.downstream_pipeline; // null if pipeline not yet triggered
+    // Only bridges have one; null until the downstream pipeline is triggered.
+    const dp = job._isBridge ? job.downstream_pipeline : null;
 
-    const tr = document.createElement('tr');
-    tr.className = `glpv-job-row glpv-status-${job.status} glpv-bridge-job`;
+    const tr = el('tr', `glpv-job-row glpv-status-${job.status}`);
+    if (job._isBridge) tr.classList.add('glpv-bridge-job');
+    tr.dataset.name = String(job.name).toLowerCase();
+    tr.dataset.status = job.status;
+    if (dp) tr.dataset.dsStatus = dp.status;
 
-    // Status cell
-    const tdStatus = document.createElement('td');
-    tdStatus.className = 'glpv-col-status';
-    const icon = document.createElement('span');
-    icon.className = `glpv-job-icon glpv-status-${job.status}`;
+    const tdStatus = el('td', 'glpv-col-status');
+    const icon = el('span', `glpv-job-icon glpv-status-${job.status}`, jc.icon);
     icon.title = jc.label;
-    icon.textContent = jc.icon;
     tdStatus.appendChild(icon);
 
-    // Name cell
-    const tdName = document.createElement('td');
-    tdName.className = 'glpv-col-name';
+    const tdName = el('td', 'glpv-col-name');
 
-    // Expand button (only when downstream pipeline exists)
     let expandBtn = null;
     if (dp) {
-      expandBtn = document.createElement('button');
-      expandBtn.className = 'glpv-expand-btn';
+      expandBtn = el('button', 'glpv-expand-btn');
       expandBtn.setAttribute('aria-expanded', 'false');
       expandBtn.title = 'Toggle downstream pipeline';
       tdName.appendChild(expandBtn);
     }
 
-    const jobLink = document.createElement('a');
+    const jobLink = el('a', 'glpv-job-link', job.name);
     jobLink.href = job.web_url;
-    jobLink.className = 'glpv-job-link';
-    jobLink.textContent = job.name;
     tdName.appendChild(jobLink);
 
     if (job.allow_failure) {
-      const opt = document.createElement('span');
-      opt.className = 'glpv-badge-optional';
-      opt.textContent = 'optional';
-      tdName.appendChild(opt);
+      tdName.appendChild(el('span', 'glpv-badge-optional', 'optional'));
+    }
+    if (job._attempts > 1) {
+      const att = el('span', 'glpv-badge-optional', `${job._attempts} attempts`);
+      att.title = `Showing the latest of ${job._attempts} attempts`;
+      tdName.appendChild(att);
+    }
+    if (job.status === 'failed' && job.failure_reason) {
+      const reason = el('span', 'glpv-failure-reason', formatFailureReason(job.failure_reason));
+      reason.title = 'Failure reason';
+      tdName.appendChild(reason);
     }
 
     // Inline downstream status badge: "→ [passed] #12"
     if (dp) {
-      const dpc = statusCfg(dp.status);
-
-      const dsBadge = document.createElement('span');
-      dsBadge.className = 'glpv-ds-badge';
-
-      const statusSpan = document.createElement('span');
-      statusSpan.className = `glpv-badge glpv-status-${dp.status}`;
-      const iconSpan = document.createElement('span');
-      iconSpan.className = 'glpv-icon';
-      iconSpan.textContent = dpc.icon;
-      statusSpan.appendChild(iconSpan);
-      statusSpan.appendChild(document.createTextNode(dpc.label));
-
-      const dpLink = document.createElement('a');
+      const dsBadge = el('span', 'glpv-ds-badge');
+      const dpLink = el('a', 'glpv-ds-link', `#${dp.id}`);
       dpLink.href = dp.web_url;
-      dpLink.className = 'glpv-ds-link';
       dpLink.title = 'Open downstream pipeline';
-      dpLink.textContent = `#${dp.id}`;
       dpLink.addEventListener('click', e => e.stopPropagation());
 
       dsBadge.appendChild(document.createTextNode('→ '));
-      dsBadge.appendChild(statusSpan);
+      dsBadge.appendChild(statusBadge(dp.status));
       dsBadge.appendChild(document.createTextNode(' '));
       dsBadge.appendChild(dpLink);
       tdName.appendChild(dsBadge);
     }
 
-    const tdStarted = document.createElement('td');
-    tdStarted.className = 'glpv-col-started';
-    tdStarted.textContent = formatDate(job.started_at) || '-';
-
-    const tdDuration = document.createElement('td');
-    tdDuration.className = 'glpv-col-duration';
-    tdDuration.textContent = formatDuration(job.duration);
-
-    const tdRunner = document.createElement('td');
-    tdRunner.className = 'glpv-col-runner';
-    tdRunner.textContent = job.runner ? (job.runner.description || `#${job.runner.id}`) : '-';
-
     tr.appendChild(tdStatus);
     tr.appendChild(tdName);
-    tr.appendChild(tdStarted);
-    tr.appendChild(tdDuration);
-    tr.appendChild(tdRunner);
+    tr.appendChild(el('td', 'glpv-col-started', formatDate(job.started_at) || '-'));
+    tr.appendChild(el('td', 'glpv-col-duration', formatDuration(job.duration)));
+    tr.appendChild(el('td', 'glpv-col-runner',
+      job.runner ? (job.runner.description || `#${job.runner.id}`) : '-'));
     attachJobActions(tr, job);
     tbody.appendChild(tr);
 
     // Expand row (hidden until toggled; first expand lazy-loads the downstream)
     if (dp) {
-      const expandRow = document.createElement('tr');
-      expandRow.className = 'glpv-ds-row';
+      const expandRow = el('tr', 'glpv-ds-row');
       expandRow.hidden = true;
+      expandRow.appendChild(el('td'));
 
-      const tdIndent = document.createElement('td');
-      expandRow.appendChild(tdIndent);
-
-      const tdContent = document.createElement('td');
-      tdContent.className = 'glpv-ds-cell';
+      const tdContent = el('td', 'glpv-ds-cell');
       tdContent.colSpan = 4;
-
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'glpv-ds-content';
+      const contentDiv = el('div', 'glpv-ds-content');
       tdContent.appendChild(contentDiv);
       expandRow.appendChild(tdContent);
       tbody.appendChild(expandRow);
 
-      if (expandBtn) {
-        setupExpand(expandBtn, expandRow, contentDiv, dp, depth);
+      setupExpand(expandBtn, expandRow, contentDiv, dp, depth);
+    }
+  }
+
+  // ── Job filter ────────────────────────────────────────────────────────────
+
+  // Kept across refreshes; reset on navigation.
+  const filter = { text: '', failedOnly: false };
+
+  function filterActive(f) {
+    return !!f.text.trim() || f.failedOnly;
+  }
+
+  // `row` carries a job row's dataset: lowercase name, status and (for
+  // trigger jobs) the downstream pipeline's status.
+  function rowMatchesFilter(row, f) {
+    const needle = f.text.trim().toLowerCase();
+    if (needle && !row.name.includes(needle)) return false;
+    if (f.failedOnly && row.status !== 'failed' && row.dsStatus !== 'failed') return false;
+    return true;
+  }
+
+  // Hide the rows (then stages) under `list` that don't match and return how
+  // many stayed visible. Loaded downstream lists are filtered too, and a
+  // trigger job stays visible while anything below it matches.
+  function filterList(list) {
+    let visible = 0;
+    for (const stage of list.querySelectorAll(':scope > .glpv-stage')) {
+      let stageVisible = 0;
+      for (const tr of stage.querySelectorAll(':scope > table > tbody > tr.glpv-job-row')) {
+        const next = tr.nextElementSibling;
+        const dsRow = next?.classList.contains('glpv-ds-row') ? next : null;
+        const nested = dsRow?.querySelector('.glpv-pipeline-list');
+        const nestedVisible = nested ? filterList(nested) : 0;
+        const show = rowMatchesFilter(tr.dataset, filter) || nestedVisible > 0;
+        tr.classList.toggle('glpv-filtered', !show);
+        dsRow?.classList.toggle('glpv-filtered', !show);
+        if (show) stageVisible++;
       }
+      stage.classList.toggle('glpv-filtered', stageVisible === 0);
+      visible += stageVisible;
+    }
+    return visible;
+  }
+
+  function applyFilter(root) {
+    if (!root) return;
+    const visible = filterList(root);
+    const empty = root.querySelector(':scope > .glpv-filter-empty');
+    if (empty) empty.hidden = !filterActive(filter) || visible > 0;
+  }
+
+  function buildFilterBar(root) {
+    const bar = el('div', 'glpv-filter-bar');
+
+    const input = el('input', 'glpv-filter-input');
+    input.type = 'search';
+    input.placeholder = 'Filter jobs by name…';
+    input.value = filter.text;
+    input.addEventListener('input', () => {
+      filter.text = input.value;
+      applyFilter(root);
+    });
+
+    const label = el('label', 'glpv-filter-failed');
+    const failedOnly = el('input');
+    failedOnly.type = 'checkbox';
+    failedOnly.checked = filter.failedOnly;
+    failedOnly.addEventListener('change', () => {
+      filter.failedOnly = failedOnly.checked;
+      applyFilter(root);
+    });
+    label.append(failedOnly, 'Failed only');
+
+    bar.append(input, label);
+    return bar;
+  }
+
+  // After a refresh swapped `root` in: the user may have typed while it was
+  // built, so re-sync the controls, re-filter, and keep the input's focus.
+  function syncFilterBar(root, oldInput) {
+    const input = root.querySelector('.glpv-filter-input');
+    const failedOnly = root.querySelector('.glpv-filter-failed input');
+    if (input) input.value = filter.text;
+    if (failedOnly) failedOnly.checked = filter.failedOnly;
+    applyFilter(root);
+    if (input && oldInput && document.activeElement === document.body) {
+      input.focus();
+      input.setSelectionRange(oldInput.selectionStart, oldInput.selectionEnd);
     }
   }
 
@@ -685,8 +777,7 @@
       refreshBtn.addEventListener('click', () => refreshListView());
       actions.appendChild(refreshBtn);
 
-      const retryBtn = makeRetryPipelineBtn(state.baseUrl, state.projectPath, pipeline);
-      if (retryBtn) actions.appendChild(retryBtn);
+      actions.append(...makePipelineActionBtns(state.baseUrl, state.projectPath, pipeline));
 
       if (bridges.length > 0) {
         const expandAllBtn = document.createElement('button');
@@ -711,6 +802,7 @@
       }
 
       root.appendChild(summary);
+      root.appendChild(buildFilterBar(root));
     }
 
     stagesMap.forEach((stageJobs, stageName) => {
@@ -745,43 +837,18 @@
 
       const tbody = document.createElement('tbody');
 
-      for (const job of stageJobs) {
-        if (job._isBridge) {
-          addBridgeRow(tbody, job, depth);
-        } else {
-          const jc = statusCfg(job.status);
-          const runnerName = job.runner
-            ? escHtml(job.runner.description || `#${job.runner.id}`)
-            : '-';
-          const tr = document.createElement('tr');
-          tr.className = `glpv-job-row glpv-status-${escHtml(job.status)}`;
-          tr.innerHTML = `
-            <td class="glpv-col-status">
-              <span class="glpv-job-icon glpv-status-${escHtml(job.status)}" title="${escHtml(jc.label)}">${jc.icon}</span>
-            </td>
-            <td class="glpv-col-name">
-              <a href="${escHtml(job.web_url)}" class="glpv-job-link">${escHtml(job.name)}</a>
-              ${job.allow_failure ? '<span class="glpv-badge-optional">optional</span>' : ''}
-              ${job._attempts > 1
-                ? `<span class="glpv-badge-optional" title="Showing the latest of ${job._attempts} attempts">${job._attempts} attempts</span>`
-                : ''}
-              ${job.status === 'failed' && job.failure_reason
-                ? `<span class="glpv-failure-reason" title="Failure reason">${escHtml(formatFailureReason(job.failure_reason))}</span>`
-                : ''}
-            </td>
-            <td class="glpv-col-started">${escHtml(formatDate(job.started_at)) || '-'}</td>
-            <td class="glpv-col-duration">${escHtml(formatDuration(job.duration))}</td>
-            <td class="glpv-col-runner">${runnerName}</td>
-          `;
-          attachJobActions(tr, job);
-          tbody.appendChild(tr);
-        }
-      }
+      for (const job of stageJobs) addJobRow(tbody, job, depth);
 
       table.appendChild(tbody);
       stageEl.appendChild(table);
       root.appendChild(stageEl);
     });
+
+    if (depth === 0) {
+      const empty = el('div', 'glpv-filter-empty', 'No jobs match the filter.');
+      empty.hidden = true;
+      root.appendChild(empty);
+    }
 
     return root;
   }
@@ -912,6 +979,7 @@
     ]);
     const root = buildListView(pipeline, jobs, bridges, 0);
     await restoreExpanded(root, openIds);
+    applyFilter(root);
     root.dataset.updatedAt = String(Date.now());
     return { root, pipeline, bridges };
   }
@@ -982,8 +1050,11 @@
       if (!now) return;
       // Anything expanded while the refresh was in flight stays open too.
       const openNow = expandedIds(now);
+      const oldInput = now.querySelector('.glpv-filter-input');
+      const hadFocus = document.activeElement === oldInput;
       root.style.display = now.style.display;
       now.replaceWith(root);
+      syncFilterBar(root, hadFocus ? oldInput : null);
       restoreExpanded(root, openNow);
       afterRender(pipeline);
     } catch (err) {
@@ -1000,6 +1071,16 @@
     } finally {
       if (seq === refresh.seq) refresh.inFlight = false;
     }
+  }
+
+  // Under Node (`node --test`), expose the pure helpers and stop before
+  // touching the page. In the browser `module` doesn't exist.
+  if (typeof module === 'object' && module.exports) {
+    module.exports = {
+      formatDuration, formatFailureReason, retryDelay, latestAttempts,
+      stageStatus, buildStageMap, rowMatchesFilter, filterActive,
+    };
+    return;
   }
 
   document.addEventListener('visibilitychange', () => {
@@ -1070,6 +1151,7 @@
 
   function cleanup() {
     expandAllActive = false;
+    Object.assign(filter, { text: '', failedOnly: false });
     clearTimeout(refresh.timer);
     clearInterval(refresh.ticker);
     Object.assign(refresh, {
@@ -1108,6 +1190,17 @@
     observerQueued = false;
     if (checkNavigation()) return;
     if (getPageInfo() && !document.getElementById('glpv-toggle')) injectListView();
+    rehideGraph();
+  }
+
+  // GitLab may replace the graph container with a fresh (visible) one; track
+  // the new element and keep it hidden while the list view is shown.
+  function rehideGraph() {
+    if (!state.graphContainer || state.graphContainer.isConnected) return;
+    const graph = findGraphContainer();
+    if (!graph) return;
+    state.graphContainer = graph;
+    if (state.isListViewActive) graph.style.display = 'none';
   }
 
   function startObserver() {

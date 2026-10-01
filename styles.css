@@ -95,6 +95,47 @@
   font-size: 12px;
 }
 
+/* ── Job filter ─────────────────────────────────────────────────────────── */
+
+.glpv-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #dde0e5;
+}
+
+.glpv-filter-input {
+  flex: 0 1 280px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #c4c9d0;
+  border-radius: 4px;
+}
+
+.glpv-filter-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: normal;
+  color: #6a737d;
+  cursor: pointer;
+}
+
+.glpv-filter-empty {
+  padding: 16px;
+  font-size: 12px;
+  color: #6a737d;
+}
+
+.glpv-filtered {
+  display: none !important;
+}
+
 /* ── Status badge ───────────────────────────────────────────────────────── */
 
 .glpv-badge {
@@ -577,6 +618,10 @@
   html.gl-system .glpv-failure-reason { color: #ff7b72; }
   html.gl-system .glpv-badge-optional { color: #768390; border-color: #444c56; }
   html.gl-system .glpv-error { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+  html.gl-system .glpv-filter-bar { border-color: #373e47; }
+  html.gl-system .glpv-filter-input { border-color: #444c56; }
+  html.gl-system .glpv-filter-failed,
+  html.gl-system .glpv-filter-empty { color: #768390; }
   html.gl-system .glpv-loading { color: #768390; }
   html.gl-system #glpv-toggle { color: #58a6ff; border-color: #388bfd; }
   html.gl-system #glpv-toggle:hover { background: #1c2d55; }
@@ -633,6 +678,10 @@ html.gl-dark .glpv-job-link:hover  { color: #58a6ff; }
 html.gl-dark .glpv-failure-reason   { color: #ff7b72; }
 html.gl-dark .glpv-badge-optional  { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+html.gl-dark .glpv-filter-bar      { border-color: #373e47; }
+html.gl-dark .glpv-filter-input    { border-color: #444c56; }
+html.gl-dark .glpv-filter-failed,
+html.gl-dark .glpv-filter-empty    { color: #768390; }
 html.gl-dark .glpv-loading         { color: #768390; }
 html.gl-dark #glpv-toggle          { color: #58a6ff; border-color: #388bfd; }
 html.gl-dark #glpv-toggle:hover    { background: #1c2d55; }

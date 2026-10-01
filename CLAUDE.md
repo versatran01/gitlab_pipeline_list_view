@@ -16,6 +16,8 @@ There is no build step, no bundler, and no package manager. All files are plain 
 3. Click "Load unpacked" and select this directory
 4. After editing any file, click the refresh icon on the extension card
 
+**Unit tests:** `node --test` runs `tests/*.test.js` against the pure helpers in `content.js` (Node 18+, no dependencies). Under Node, `content.js` exports those helpers via `module.exports` and returns before touching the DOM; in the browser `module` is undefined, so that block is skipped. Add new pure helpers to that export list when you test them.
+
 **Manual testing:** Navigate to any GitLab pipeline detail page (e.g. `https://gitlab.com/<group>/<project>/-/pipelines/<id>`). A "☰ List View" button should appear near the pipeline header.
 
 ## Architecture
@@ -38,12 +40,13 @@ There is no build step, no bundler, and no package manager. All files are plain 
 - `buildListView` is called recursively for downstream (child) pipelines with a `depth` argument — depth 0 adds the summary bar.
 - `apiFetch` (GETs only) retries network errors, 429 and 5xx up to 3 times with backoff (honouring `Retry-After`); play/retry POSTs (`apiPost`) are never repeated automatically.
 - Jobs are fetched with `include_retried=true`; `latestAttempts` keeps only the newest attempt per job name, so stage rollups and counts reflect the current state and rows show an "N attempts" badge.
-- Failed/canceled jobs get a per-row **Retry** button (`POST /jobs/:id/retry`); failed/canceled pipelines (root summary and downstream headers) get **Retry failed** (`POST /pipelines/:id/retry`).
+- Every row (regular and trigger job) is built by `addJobRow`. Failed/canceled jobs get a per-row **Retry** button (`POST /jobs/:id/retry`) and running/pending ones a **Cancel** button (`POST /jobs/:id/cancel`); bridges get neither. Pipelines (root summary and downstream headers) get **Retry failed** when failed/canceled and **Cancel** (with a confirm) while active — see `makePipelineActionBtns`.
+- **Filter:** the root has a name filter + "Failed only" toggle. State lives in the module-level `filter` object (survives refreshes, reset in `cleanup()`); `applyFilter` hides non-matching rows/stages with `.glpv-filtered`, recursing into loaded downstreams — a trigger job stays visible while anything under it matches. It's re-applied after `buildRoot`, after each downstream loads, and in `syncFilterBar` after a refresh swap (which also restores input focus).
 - Expand/collapse of downstream pipelines is lazy: the API fetch only fires on first expand. `setupExpand` registers each button's expand function in the `expanders` WeakMap so a refresh can re-open and await them.
 - **Auto refresh:** while the root pipeline status is in `ACTIVE_STATUSES`, `refreshListView` re-fetches every `REFRESH_MS`, builds the new tree off-DOM with previously expanded downstreams re-loaded (`buildRoot` → `restoreExpanded`), then swaps it in. Paused while the tab is hidden or the graph view is shown (catches up on return); a failed refresh keeps the old view. Playing/retrying a job triggers a refresh via `requestRefresh`. `refresh.seq` is bumped in `cleanup()` so in-flight refreshes for a previous pipeline are dropped.
 - A failed initial load renders an error box with a Retry button and is never reused by the toggle.
 - Navigation on GitLab's SPA is detected by comparing `location.pathname` on the Navigation API's `currententrychange`, `popstate`, and DOM mutations (patching `history.pushState` doesn't work from the content script's isolated world).
-- A debounced `MutationObserver` on `document.body` re-injects the toggle button if GitLab re-renders the pipeline header.
+- A debounced `MutationObserver` on `document.body` re-injects the toggle button if GitLab re-renders the pipeline header, and re-hides the graph if GitLab replaces its container (`rehideGraph`).
 - Stages are ordered by their lowest job/bridge id (the API order isn't stage order).
 - Dark styles apply for `html.gl-dark`, or `html.gl-system` (GitLab "Auto" color mode) with a dark OS theme.
 
