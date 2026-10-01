@@ -3,6 +3,7 @@
   'use strict';
 
   const STORAGE_KEY = 'glpv_auto_list_view';
+  const AUTO_EXPAND_KEY = 'glpv_auto_expand';
 
   let expandAllActive = false;
 
@@ -615,10 +616,15 @@
       fetchPipeline(info.baseUrl, info.projectPath, info.pipelineId),
       fetchAllJobs(info.baseUrl, info.projectPath, info.pipelineId),
       fetchAllBridges(info.baseUrl, info.projectPath, info.pipelineId),
+      chrome.storage.local.get(AUTO_EXPAND_KEY).catch(() => ({})),
     ])
-      .then(([pipeline, jobs, bridges]) => {
+      .then(([pipeline, jobs, bridges, autoExpandSaved]) => {
         const listView = buildListView(pipeline, jobs, bridges, 0);
         loading.replaceWith(listView);
+
+        if (autoExpandSaved[AUTO_EXPAND_KEY] && bridges.length > 0) {
+          listView.querySelector('.glpv-expand-all-btn')?.click();
+        }
       })
       .catch(err => {
         loading.className = 'glpv-error';
