@@ -214,6 +214,35 @@
   border-bottom: 1px solid #dde0e5;
 }
 
+.glpv-stage-header[role="button"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.glpv-stage-header[role="button"]:focus-visible {
+  outline: 2px solid #1f75cb;
+  outline-offset: -2px;
+}
+
+.glpv-stage-chevron {
+  width: 10px;
+  font-size: 10px;
+  color: #6a737d;
+  transition: transform 0.15s;
+}
+
+.glpv-stage--collapsed:not(.glpv-stage--filter-open) .glpv-stage-chevron {
+  transform: rotate(-90deg);
+}
+
+.glpv-stage--collapsed:not(.glpv-stage--filter-open) > .glpv-jobs-table {
+  display: none;
+}
+
+.glpv-stage--collapsed:not(.glpv-stage--filter-open) > .glpv-stage-header {
+  border-bottom: none;
+}
+
 .glpv-stage-dot {
   width: 9px;
   height: 9px;
@@ -607,6 +636,7 @@
   html.gl-system .glpv-stage-header { background: #1c2128; border-color: #373e47; }
   html.gl-system .glpv-stage-name { color: #adbac7; }
   html.gl-system .glpv-stage-count { color: #768390; }
+  html.gl-system .glpv-stage-chevron { color: #768390; }
   html.gl-system .glpv-jobs-table { background: #22272e; }
   html.gl-system .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
   html.gl-system .glpv-jobs-table tbody tr { border-color: #2d333b; }
@@ -667,6 +697,7 @@ html.gl-dark .glpv-stage           { border-color: #373e47; }
 html.gl-dark .glpv-stage-header    { background: #1c2128; border-color: #373e47; }
 html.gl-dark .glpv-stage-name      { color: #adbac7; }
 html.gl-dark .glpv-stage-count     { color: #768390; }
+html.gl-dark .glpv-stage-chevron   { color: #768390; }
 html.gl-dark .glpv-jobs-table      { background: #22272e; }
 html.gl-dark .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
 html.gl-dark .glpv-jobs-table tbody tr { border-color: #2d333b; }
