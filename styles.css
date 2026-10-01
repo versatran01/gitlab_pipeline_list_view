@@ -543,6 +543,47 @@
   text-decoration: underline;
 }
 
+/* ── Failed-job log preview ─────────────────────────────────────────────── */
+
+.glpv-log-row:hover {
+  background: transparent !important;
+}
+
+.glpv-log-row > td {
+  padding-top: 0 !important;
+  padding-bottom: 10px !important;
+}
+
+/* Terminal-style in every color mode, like GitLab's job log */
+.glpv-log {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px 10px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #e6e6e6;
+  background: #1f1f1f;
+  border-radius: 4px;
+}
+
+.glpv-log-full {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #1f75cb;
+}
+
+.glpv-log-status {
+  font-size: 12px;
+  color: #6a737d;
+}
+
+.glpv-log-status--error {
+  color: #db3b21;
+}
+
 /* ── Downstream expand row ──────────────────────────────────────────────── */
 
 .glpv-ds-row:hover {
@@ -646,6 +687,9 @@
   html.gl-system .glpv-job-link { color: #cdd9e5; }
   html.gl-system .glpv-job-link:hover { color: #58a6ff; }
   html.gl-system .glpv-failure-reason { color: #ff7b72; }
+  html.gl-system .glpv-log-full { color: #58a6ff; }
+  html.gl-system .glpv-log-status { color: #768390; }
+  html.gl-system .glpv-log-status--error { color: #ff7b72; }
   html.gl-system .glpv-badge-optional { color: #768390; border-color: #444c56; }
   html.gl-system .glpv-error { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
   html.gl-system .glpv-filter-bar { border-color: #373e47; }
@@ -707,6 +751,9 @@ html.gl-dark .glpv-col-runner      { color: #768390; }
 html.gl-dark .glpv-job-link        { color: #cdd9e5; }
 html.gl-dark .glpv-job-link:hover  { color: #58a6ff; }
 html.gl-dark .glpv-failure-reason   { color: #ff7b72; }
+html.gl-dark .glpv-log-full { color: #58a6ff; }
+html.gl-dark .glpv-log-status { color: #768390; }
+html.gl-dark .glpv-log-status--error { color: #ff7b72; }
 html.gl-dark .glpv-badge-optional  { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
 html.gl-dark .glpv-filter-bar      { border-color: #373e47; }

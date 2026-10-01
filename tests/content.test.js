@@ -5,7 +5,7 @@ const {
   formatDuration, formatFailureReason, retryDelay, latestAttempts,
   stageStatus, buildStageMap, rowMatchesFilter, filterActive,
   mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
-  defaultCollapsed,
+  defaultCollapsed, logTail,
 } = require('../content.js');
 
 test('formatDuration', () => {
@@ -194,4 +194,27 @@ test('defaultCollapsed collapses passed stages only when something failed', () =
     [true, false, false, true]);
   assert.deepEqual(defaultCollapsed(['success', 'running']), [false, false]);
   assert.deepEqual(defaultCollapsed([]), []);
+});
+
+test('logTail strips ANSI codes and section markers, keeps the last lines', () => {
+  const raw = [
+    '\x1b[0KRunning with gitlab-runner 17.0',
+    'section_start:1700000000:step_script\r\x1b[0K\x1b[36;1mExecuting "step_script"\x1b[0;m',
+    '$ npm test',
+    'Downloading 10%\rDownloading 50%\rDownloading 100%',
+    '\x1b[31;1mERROR: 3 tests failed\x1b[0;m',
+    'section_end:1700000099:step_script\r\x1b[0K',
+    '',
+    '',
+  ].join('\n');
+  assert.equal(logTail(raw, 100), [
+    'Running with gitlab-runner 17.0',
+    'Executing "step_script"',
+    '$ npm test',
+    'Downloading 100%',
+    'ERROR: 3 tests failed',
+  ].join('\n'));
+  assert.equal(logTail(raw, 2), 'Downloading 100%\nERROR: 3 tests failed');
+  assert.equal(logTail('line\r\n', 5), 'line');
+  assert.equal(logTail('', 5), '');
 });

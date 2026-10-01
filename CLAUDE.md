@@ -16,7 +16,7 @@ There is no build step, no bundler, and no package manager. All files are plain 
 3. Click "Load unpacked" and select this directory
 4. After editing any file, click the refresh icon on the extension card
 
-**Unit tests:** `node --test` runs `tests/*.test.js` against the pure helpers in `content.js` (Node 18+, no dependencies). Under Node, `content.js` exports those helpers via `module.exports` and returns before touching the DOM; in the browser `module` is undefined, so that block is skipped. Add new pure helpers to that export list when you test them.
+**Unit tests:** `node --test` runs `tests/*.test.js` (Node 18+, no dependencies): the pure helpers in `content.js`, and `instances.js` against a fake `chrome` API. Under Node, `content.js` exports those helpers via `module.exports` and returns before touching the DOM; in the browser `module` is undefined, so that block is skipped. Add new pure helpers to that export list when you test them.
 
 **Manual testing:** Navigate to any GitLab pipeline detail page (e.g. `https://gitlab.com/<group>/<project>/-/pipelines/<id>`). A "☰ List View" button should appear near the pipeline header.
 
@@ -25,7 +25,8 @@ There is no build step, no bundler, and no package manager. All files are plain 
 | File | Role |
 |---|---|
 | `manifest.json` | MV3 manifest — declares permissions, content script patterns, service worker, popup, options page |
-| `background.js` | Service worker — re-registers content scripts for saved self-hosted instances on `onInstalled`/`onStartup` |
+| `background.js` | Service worker — calls `syncInstanceScripts` on `onInstalled`/`onStartup` |
+| `instances.js` | Shared by `background.js` (`importScripts`) and `options.js` (`<script>`): `instanceScript(origin)` defines what's registered for a self-hosted instance; `syncInstanceScripts` registers missing ones, updates registrations left by an older version (they persist across updates), skips instances whose permission was revoked, and unregisters removed ones |
 | `content.js` | Core logic — injected into pipeline pages; fetches jobs+bridges from GitLab REST API and renders the list view |
 | `options.js` | Options page — manages self-hosted GitLab origins; requests host permissions at runtime and registers content scripts dynamically |
 | `popup.js` | Popup — toggles the `glpv_auto_list_view` storage key; opens the options page |
@@ -45,6 +46,7 @@ There is no build step, no bundler, and no package manager. All files are plain 
 - Downstream data is loaded by `loadDownstream`, which caches **finished** downstreams in `dsCache` keyed by the parent bridge's `downstream_pipeline` url+status+updated_at — refreshes don't re-fetch them, and a restart inside one changes the key. The cache is cleared by `requestRefresh` (after any play/retry/cancel) and `cleanup()`.
 - Expand/collapse of downstream pipelines is lazy: the API fetch only fires on first expand. `setupExpand` registers each button's expand function in the `expanders` WeakMap so a refresh can re-open and await them.
 - **Auto refresh:** while the root pipeline status is in `ACTIVE_STATUSES`, `refreshListView` re-fetches every `REFRESH_MS`, builds the new tree off-DOM with previously expanded downstreams re-loaded (`buildRoot` → `restoreExpanded`), then swaps it in. Paused while the tab is hidden or the graph view is shown (catches up on return); a failed refresh keeps the old view. Playing/retrying a job triggers a refresh via `requestRefresh`. `refresh.seq` is bumped in `cleanup()` so in-flight refreshes for a previous pipeline are dropped.
+- **Log preview:** failed (non-bridge) jobs get a **Log** button that toggles a `.glpv-log-row` under the row with the last `LOG_TAIL_LINES` lines of `GET /jobs/:id/trace`, cleaned by `logTail` (ANSI codes, section markers, `\r` overwrites). Tails are cached in `logCache` and open previews tracked in `openLogs` (both reset in `cleanup()`), so they stay open across refreshes. The filter hides a log row with its job row.
 - **Collapsible stages:** stage headers toggle their job table (click, Enter/Space). `defaultCollapsed` starts fully passed stages collapsed when that pipeline has a failed stage; manual toggles are kept in `stageOverrides` (`<pipeline id>:<stage>`, survives refreshes, reset in `cleanup()`). While a filter is active, stages with matches get `.glpv-stage--filter-open` so collapsed ones still show them.
 - **Live durations:** `jobTiming` / `pipelineTiming` decide what a duration shows — running jobs count from their `duration` (GitLab's elapsed time at fetch), pending ones show `queued <queued_duration>`, active pipelines count from `started_at` (their `duration` is null until finished). `timingEl` stamps live elements with `data-live-secs`/`data-live-from`, and `tickLive` advances them every second on the same 1s ticker as the "updated Xs ago" label.
 - A failed initial load renders an error box with a Retry button and is never reused by the toggle.
@@ -66,4 +68,4 @@ There is no build step, no bundler, and no package manager. All files are plain 
 - `storage` and `scripting` are declared statically.
 - `optional_host_permissions: ["*://*/*"]` allows the extension to request access to arbitrary origins at runtime (used for self-hosted instances).
 - The static content script in `manifest.json` only matches `https://gitlab.com/*/-/pipelines/*`.
-- Self-hosted instances get dynamically registered scripts via `chrome.scripting.registerContentScripts`.
+- Self-hosted instances get dynamically registered scripts via `chrome.scripting.registerContentScripts`. To change what runs on them, edit `instanceScript` in `instances.js` — existing installs pick it up on the next update/browser start.
