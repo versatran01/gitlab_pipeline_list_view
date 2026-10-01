@@ -47,6 +47,12 @@
   // collapsed?). Survives refreshes; otherwise defaultCollapsed decides.
   const stageOverrides = new Map();
 
+  // Failed-job log previews: ids of jobs whose preview is open (re-opened
+  // after a refresh) and the fetched tails (a failed job's log is final).
+  const openLogs = new Set();
+  const logCache = new Map();
+  const LOG_TAIL_LINES = 30;
+
   const state = {
     pipelineId: null,
     projectPath: null,
@@ -311,6 +317,89 @@
     const base = originOf(job.web_url);
     const proj = job.pipeline?.project_id ?? projectPathOf(job.web_url);
     return apiPost(`${projApiBase(base, proj)}/jobs/${job.id}/${action}`);
+  }
+
+  // The last `n` non-empty-trailing lines of a raw job log, as plain text:
+  // ANSI escapes and GitLab's collapsible-section markers removed, and
+  // carriage-return overwrites (progress bars) resolved to what's shown.
+  function logTail(raw, n) {
+    const lines = raw
+      .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+      .replace(/section_(?:start|end):\d+:[^\r\n]*?\r/g, '')
+      .split('\n')
+      .map(line => {
+        line = line.replace(/\r+$/, '');
+        const cr = line.lastIndexOf('\r');
+        return cr === -1 ? line : line.slice(cr + 1);
+      });
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    return lines.slice(-n).join('\n');
+  }
+
+  async function fetchLogTail(job) {
+    if (logCache.has(job.id)) return logCache.get(job.id);
+    const base = originOf(job.web_url);
+    const proj = job.pipeline?.project_id ?? projectPathOf(job.web_url);
+    const res = await apiFetch(`${projApiBase(base, proj)}/jobs/${job.id}/trace`);
+    const tail = logTail(await res.text(), LOG_TAIL_LINES);
+    logCache.set(job.id, tail);
+    return tail;
+  }
+
+  // "Log" button on a failed job: toggles a row under it with the end of
+  // the job log, loaded on first open.
+  function attachLogPreview(tbody, tr, job) {
+    const nameCell = tr.querySelector('.glpv-col-name');
+    const btn = el('button', 'glpv-retry-btn glpv-log-btn', 'Log');
+    btn.title = `Show the last ${LOG_TAIL_LINES} lines of the job log`;
+    btn.setAttribute('aria-expanded', 'false');
+    nameCell.appendChild(btn);
+
+    const logRow = el('tr', 'glpv-log-row');
+    logRow.hidden = true;
+    logRow.appendChild(el('td'));
+    const cell = el('td', 'glpv-log-cell');
+    cell.colSpan = 4;
+    logRow.appendChild(cell);
+    tbody.appendChild(logRow);
+
+    let loaded = false;
+    async function load() {
+      loaded = true;
+      cell.replaceChildren(el('div', 'glpv-log-status', 'Loading log…'));
+      try {
+        const tail = await fetchLogTail(job);
+        const pre = el('pre', 'glpv-log', tail || '(empty log)');
+        const full = el('a', 'glpv-log-full', 'Open full log →');
+        full.href = job.web_url;
+        cell.replaceChildren(pre, full);
+        pre.scrollTop = pre.scrollHeight;
+      } catch (err) {
+        loaded = false;
+        const msg = el('div', 'glpv-log-status glpv-log-status--error',
+          `Failed to load log: ${err.message}`);
+        const retry = el('button', 'glpv-retry-btn', 'Retry');
+        retry.addEventListener('click', load);
+        msg.appendChild(retry);
+        cell.replaceChildren(msg);
+        console.error('[GitLab Pipeline List View] log fetch failed:', err);
+      }
+    }
+
+    function setOpen(open) {
+      logRow.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      btn.textContent = open ? 'Hide log' : 'Log';
+      if (open) openLogs.add(job.id); else openLogs.delete(job.id);
+      if (open && !loaded) load();
+    }
+
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(logRow.hidden);
+    });
+    if (openLogs.has(job.id)) setOpen(true);
   }
 
   // Retry every failed/canceled job of one pipeline (`action` = 'retry',
@@ -734,6 +823,7 @@
       job.runner ? (job.runner.description || `#${job.runner.id}`) : '-'));
     attachJobActions(tr, job);
     tbody.appendChild(tr);
+    if (job.status === 'failed' && !job._isBridge) attachLogPreview(tbody, tr, job);
 
     // Expand row (hidden until toggled; first expand lazy-loads the downstream)
     if (dp) {
@@ -792,13 +882,14 @@
     for (const stage of list.querySelectorAll(':scope > .glpv-stage')) {
       let stageVisible = 0;
       for (const tr of stage.querySelectorAll(':scope > table > tbody > tr.glpv-job-row')) {
+        // The row's companion: a downstream row (bridges) or a log row.
         const next = tr.nextElementSibling;
-        const dsRow = next?.classList.contains('glpv-ds-row') ? next : null;
-        const nested = dsRow?.querySelector('.glpv-pipeline-list');
+        const extra = next?.matches('.glpv-ds-row, .glpv-log-row') ? next : null;
+        const nested = extra?.querySelector('.glpv-pipeline-list');
         const nestedVisible = nested ? filterList(nested) : 0;
         const show = rowMatchesFilter(tr.dataset, filter) || nestedVisible > 0;
         tr.classList.toggle('glpv-filtered', !show);
-        dsRow?.classList.toggle('glpv-filtered', !show);
+        extra?.classList.toggle('glpv-filtered', !show);
         if (show) stageVisible++;
       }
       stage.classList.toggle('glpv-filtered', stageVisible === 0);
@@ -1238,7 +1329,7 @@
       formatDuration, formatFailureReason, retryDelay, latestAttempts,
       stageStatus, buildStageMap, rowMatchesFilter, filterActive,
       mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
-      defaultCollapsed,
+      defaultCollapsed, logTail,
     };
     return;
   }
@@ -1313,6 +1404,8 @@
     expandAllActive = false;
     dsCache.clear();
     stageOverrides.clear();
+    openLogs.clear();
+    logCache.clear();
     Object.assign(filter, { text: '', failedOnly: false });
     clearTimeout(refresh.timer);
     clearInterval(refresh.ticker);

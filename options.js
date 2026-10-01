@@ -1,9 +1,5 @@
-/* global chrome */
-const INSTANCES_KEY = 'glpv_instances';
-
-function scriptId(origin) {
-  return 'glpv_inst_' + origin.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_');
-}
+/* global chrome, INSTANCES_KEY, scriptId, instanceScript */
+// INSTANCES_KEY, scriptId and instanceScript come from instances.js.
 
 async function getInstances() {
   const data = await chrome.storage.local.get(INSTANCES_KEY);
@@ -72,18 +68,13 @@ async function addInstance() {
   }
 
   try {
-    await chrome.scripting.registerContentScripts([{
-      id: scriptId(origin),
-      matches: [`${origin}/*/-/pipelines/*`],
-      js: ['content.js'],
-      css: ['styles.css'],
-      runAt: 'document_idle',
-    }]);
+    const script = instanceScript(origin);
+    const [existing] = await chrome.scripting.getRegisteredContentScripts({ ids: [script.id] });
+    if (existing) await chrome.scripting.updateContentScripts([script]);
+    else await chrome.scripting.registerContentScripts([script]);
   } catch (err) {
-    if (!err.message?.includes('already registered')) {
-      setStatus(`Failed to register content script: ${err.message}`, true);
-      return;
-    }
+    setStatus(`Failed to register content script: ${err.message}`, true);
+    return;
   }
 
   instances.push(origin);
