@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const {
   formatDuration, formatFailureReason, retryDelay, latestAttempts,
   stageStatus, buildStageMap, rowMatchesFilter, filterActive,
-  mapLimit, fetchPaged, loadDownstream,
+  mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
 } = require('../content.js');
 
 test('formatDuration', () => {
@@ -160,4 +160,29 @@ test('loadDownstream caches finished pipelines only', async () => {
   await loadDownstream('https://gl.test', stale);
   await loadDownstream('https://gl.test', stale);
   assert.equal(calls, 18);
+});
+
+test('jobTiming', () => {
+  const now = Date.parse('2026-01-01T00:10:00Z');
+  assert.deepEqual(jobTiming({ status: 'running', duration: 42 }, now),
+    { seconds: 42, prefix: '', live: true });
+  assert.deepEqual(jobTiming({ status: 'running', started_at: '2026-01-01T00:08:00Z' }, now),
+    { seconds: 120, prefix: '', live: true });
+  assert.equal(jobTiming({ status: 'running' }, now).live, false);
+  assert.deepEqual(jobTiming({ status: 'pending', queued_duration: 7.5 }, now),
+    { seconds: 7.5, prefix: 'queued ', live: true });
+  assert.deepEqual(jobTiming({ status: 'pending' }, now),
+    { seconds: undefined, prefix: '', live: false });
+  assert.deepEqual(jobTiming({ status: 'success', duration: 90, queued_duration: 3 }, now),
+    { seconds: 90, prefix: '', live: false });
+});
+
+test('pipelineTiming', () => {
+  const now = Date.parse('2026-01-01T00:10:00Z');
+  assert.deepEqual(pipelineTiming({ status: 'running', started_at: '2026-01-01T00:05:00Z' }, now),
+    { seconds: 300, prefix: '', live: true });
+  assert.equal(pipelineTiming({ status: 'pending' }, now), null);
+  assert.deepEqual(pipelineTiming({ status: 'success', duration: 61 }, now),
+    { seconds: 61, prefix: '', live: false });
+  assert.equal(pipelineTiming({ status: 'canceled', duration: null }, now), null);
 });
