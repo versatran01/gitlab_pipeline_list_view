@@ -19,6 +19,8 @@
   const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
   const MAX_GET_RETRIES = 3;
   const MAX_RETRY_DELAY_MS = 10000;
+  // Remaining result pages are fetched in parallel, this many at a time.
+  const PAGE_CONCURRENCY = 4;
 
   let expandAllActive = false;
 
@@ -36,6 +38,10 @@
   // Expand button → its async (un)expand function; lets a refresh re-open
   // downstream pipelines and wait for them to load.
   const expanders = new WeakMap();
+
+  // Data of finished downstream pipelines, reused by refreshes instead of
+  // re-fetching. Keyed by dsCacheKey, which changes when the downstream does.
+  const dsCache = new Map();
 
   const state = {
     pipelineId: null,
@@ -166,18 +172,50 @@
     return res.json();
   }
 
+  // Run `fn` over `items` with at most `limit` calls in flight; results keep
+  // the input order.
+  async function mapLimit(items, limit, fn) {
+    const results = new Array(items.length);
+    let next = 0;
+    async function worker() {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i], i);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
+  }
+
+  // Page 1 tells us the page count (X-Total-Pages); the rest are fetched in
+  // parallel. GitLab omits that header for very large result sets, so then
+  // fall back to following X-Next-Page one page at a time.
   async function fetchPaged(url) {
     const sep = url.includes('?') ? '&' : '?';
-    let page = 1;
-    let all = [];
-    while (true) {
+    const getPage = async page => {
       const res = await apiFetch(`${url}${sep}per_page=100&page=${page}`);
       const items = await res.json();
-      if (!Array.isArray(items) || items.length === 0) break;
-      all = all.concat(items);
-      const total = parseInt(res.headers.get('X-Total-Pages') || '1', 10);
-      if (page >= total) break;
-      page++;
+      return { res, items: Array.isArray(items) ? items : [] };
+    };
+
+    const first = await getPage(1);
+    const all = [...first.items];
+    const total = parseInt(first.res.headers.get('X-Total-Pages'), 10);
+
+    if (Number.isFinite(total)) {
+      const pages = Array.from({ length: Math.max(total - 1, 0) }, (_, i) => i + 2);
+      const rest = await mapLimit(pages, PAGE_CONCURRENCY, getPage);
+      for (const { items } of rest) all.push(...items);
+      return all;
+    }
+
+    let res = first.res;
+    let items = first.items;
+    while (items.length) {
+      const nextPage = parseInt(res.headers.get('X-Next-Page'), 10);
+      if (!Number.isFinite(nextPage)) break;
+      ({ res, items } = await getPage(nextPage));
+      all.push(...items);
     }
     return all;
   }
@@ -459,6 +497,28 @@
     return Promise.all(btns.map(b => expanders.get(b)?.(true, ids)));
   }
 
+  // A downstream is only cached once finished; the key includes the parent
+  // bridge's view of its status and updated_at, so a retry or restart inside
+  // it (which bumps both) misses the cache on the next refresh.
+  function dsCacheKey(downstream) {
+    return `${downstream.web_url}|${downstream.status}|${downstream.updated_at}`;
+  }
+
+  async function loadDownstream(dpBase, downstream) {
+    const key = dsCacheKey(downstream);
+    const cached = dsCache.get(key);
+    if (cached) return cached;
+    const data = await Promise.all([
+      fetchPipeline(dpBase, downstream.project_id, downstream.id),
+      fetchAllJobs(dpBase, downstream.project_id, downstream.id),
+      fetchAllBridges(dpBase, downstream.project_id, downstream.id),
+    ]);
+    if (!ACTIVE_STATUSES.has(downstream.status) && !ACTIVE_STATUSES.has(data[0].status)) {
+      dsCache.set(key, data);
+    }
+    return data;
+  }
+
   function setupExpand(btn, expandRow, contentDiv, downstream, depth) {
     let loaded = false;
     btn.dataset.dsId = String(downstream.id);
@@ -479,11 +539,7 @@
       const dpBase = originOf(downstream.web_url);
 
       try {
-        const [pipeline, djobs, dbridges] = await Promise.all([
-          fetchPipeline(dpBase, downstream.project_id, downstream.id),
-          fetchAllJobs(dpBase, downstream.project_id, downstream.id),
-          fetchAllBridges(dpBase, downstream.project_id, downstream.id),
-        ]);
+        const [pipeline, djobs, dbridges] = await loadDownstream(dpBase, downstream);
 
         const projPath = projectPathOf(downstream.web_url) || `Project ${downstream.project_id}`;
 
@@ -1002,6 +1058,9 @@
   // Refresh soon regardless of status (after a play/retry restarts a
   // finished pipeline).
   function requestRefresh(delay) {
+    // An action may have restarted a finished downstream before its parent
+    // bridge reflects that, so don't trust the cache this time.
+    dsCache.clear();
     clearTimeout(refresh.timer);
     refresh.timer = setTimeout(() => refreshListView(), delay);
   }
@@ -1079,6 +1138,7 @@
     module.exports = {
       formatDuration, formatFailureReason, retryDelay, latestAttempts,
       stageStatus, buildStageMap, rowMatchesFilter, filterActive,
+      mapLimit, fetchPaged, loadDownstream,
     };
     return;
   }
@@ -1151,6 +1211,7 @@
 
   function cleanup() {
     expandAllActive = false;
+    dsCache.clear();
     Object.assign(filter, { text: '', failedOnly: false });
     clearTimeout(refresh.timer);
     clearInterval(refresh.ticker);
