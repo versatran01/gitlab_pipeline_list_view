@@ -303,6 +303,12 @@
 
 /* ── Optional badge ─────────────────────────────────────────────────────── */
 
+.glpv-failure-reason {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #c0392b;
+}
+
 .glpv-badge-optional {
   display: inline-block;
   margin-left: 6px;
@@ -548,57 +554,61 @@
   line-height: 1.4;
 }
 
-/* ── Dark mode: system ──────────────────────────────────────────────────── */
+/* ── Dark mode: GitLab "Auto" color mode following a dark OS theme ──────── */
 
 @media (prefers-color-scheme: dark) {
-  #glpv-root            { color: #cdd9e5; }
-  .glpv-pipeline-list   { border-color: #373e47; }
-  .glpv-summary         { background: #1c2128; border-color: #373e47; }
-  .glpv-summary-ref     { color: #cdd9e5; }
-  .glpv-summary-meta    { color: #768390; }
-  .glpv-stage           { border-color: #373e47; }
-  .glpv-stage-header    { background: #1c2128; border-color: #373e47; }
-  .glpv-stage-name      { color: #adbac7; }
-  .glpv-stage-count     { color: #768390; }
-  .glpv-jobs-table      { background: #22272e; }
-  .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
-  .glpv-jobs-table tbody tr { border-color: #2d333b; }
-  .glpv-jobs-table tbody tr:hover { background: #2d333b; }
-  .glpv-col-started, .glpv-col-runner { color: #768390; }
-  .glpv-job-link        { color: #cdd9e5; }
-  .glpv-job-link:hover  { color: #58a6ff; }
-  .glpv-badge-optional  { color: #768390; border-color: #444c56; }
-  .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
-  .glpv-loading         { color: #768390; }
-  #glpv-toggle          { color: #58a6ff; border-color: #388bfd; }
-  #glpv-toggle:hover    { background: #1c2d55; }
-  #glpv-toggle.glpv-btn-active       { background: #1f6feb; border-color: #388bfd; color: #fff; }
-  #glpv-toggle.glpv-btn-active:hover { background: #1a60d4; }
+  html.gl-system #glpv-root { color: #cdd9e5; }
+  html.gl-system .glpv-pipeline-list { border-color: #373e47; }
+  html.gl-system .glpv-summary { background: #1c2128; border-color: #373e47; }
+  html.gl-system .glpv-summary-ref { color: #cdd9e5; }
+  html.gl-system .glpv-summary-meta { color: #768390; }
+  html.gl-system .glpv-stage { border-color: #373e47; }
+  html.gl-system .glpv-stage-header { background: #1c2128; border-color: #373e47; }
+  html.gl-system .glpv-stage-name { color: #adbac7; }
+  html.gl-system .glpv-stage-count { color: #768390; }
+  html.gl-system .glpv-jobs-table { background: #22272e; }
+  html.gl-system .glpv-jobs-table thead th { background: #1c2128; color: #768390; border-color: #373e47; }
+  html.gl-system .glpv-jobs-table tbody tr { border-color: #2d333b; }
+  html.gl-system .glpv-jobs-table tbody tr:hover { background: #2d333b; }
+  html.gl-system .glpv-col-started,
+  html.gl-system .glpv-col-runner { color: #768390; }
+  html.gl-system .glpv-job-link { color: #cdd9e5; }
+  html.gl-system .glpv-job-link:hover { color: #58a6ff; }
+  html.gl-system .glpv-failure-reason { color: #ff7b72; }
+  html.gl-system .glpv-badge-optional { color: #768390; border-color: #444c56; }
+  html.gl-system .glpv-error { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+  html.gl-system .glpv-loading { color: #768390; }
+  html.gl-system #glpv-toggle { color: #58a6ff; border-color: #388bfd; }
+  html.gl-system #glpv-toggle:hover { background: #1c2d55; }
+  html.gl-system #glpv-toggle.glpv-btn-active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+  html.gl-system #glpv-toggle.glpv-btn-active:hover { background: #1a60d4; }
   /* Play button */
-  .glpv-play-btn        { color: #768390; border-color: #444c56; }
-  .glpv-play-btn:hover  { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
-  .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
+  html.gl-system .glpv-play-btn { color: #768390; border-color: #444c56; }
+  html.gl-system .glpv-play-btn:hover { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
+  html.gl-system .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
   /* Expand All button */
-  .glpv-expand-all-btn, .glpv-action-btn,
-  .glpv-retry-btn       { color: #58a6ff; border-color: #2d4a7a; }
-  .glpv-expand-all-btn:hover,
-  .glpv-action-btn:hover:not(:disabled),
-  .glpv-retry-btn:hover:not(:disabled) { background: #1c2d55; border-color: #58a6ff; }
-  .glpv-retry-btn--error, .glpv-action-btn--error,
-  .glpv-updated--error  { color: #ff7b72; border-color: #8b2020; }
+  html.gl-system .glpv-expand-all-btn,
+  html.gl-system .glpv-action-btn,
+  html.gl-system .glpv-retry-btn { color: #58a6ff; border-color: #2d4a7a; }
+  html.gl-system .glpv-expand-all-btn:hover,
+  html.gl-system .glpv-action-btn:hover:not(:disabled),
+  html.gl-system .glpv-retry-btn:hover:not(:disabled) { background: #1c2d55; border-color: #58a6ff; }
+  html.gl-system .glpv-retry-btn--error,
+  html.gl-system .glpv-action-btn--error,
+  html.gl-system .glpv-updated--error { color: #ff7b72; border-color: #8b2020; }
   /* Expand & downstream */
-  .glpv-expand-btn      { color: #768390; border-color: #444c56; }
-  .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }
-  .glpv-ds-badge        { color: #768390; }
-  .glpv-ds-link         { color: #768390; }
-  .glpv-ds-link:hover   { color: #58a6ff; }
-  .glpv-ds-content      { border-color: #373e47; }
-  .glpv-ds-proj-link    { color: #cdd9e5; }
-  .glpv-ds-proj-link:hover { color: #58a6ff; }
-  .glpv-ds-meta         { color: #768390; }
-  .glpv-ds-loading      { color: #768390; }
-  .glpv-ds-error        { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
-  .glpv-ds-content .glpv-pipeline-list { border-color: #2d333b; }
+  html.gl-system .glpv-expand-btn { color: #768390; border-color: #444c56; }
+  html.gl-system .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }
+  html.gl-system .glpv-ds-badge { color: #768390; }
+  html.gl-system .glpv-ds-link { color: #768390; }
+  html.gl-system .glpv-ds-link:hover { color: #58a6ff; }
+  html.gl-system .glpv-ds-content { border-color: #373e47; }
+  html.gl-system .glpv-ds-proj-link { color: #cdd9e5; }
+  html.gl-system .glpv-ds-proj-link:hover { color: #58a6ff; }
+  html.gl-system .glpv-ds-meta { color: #768390; }
+  html.gl-system .glpv-ds-loading { color: #768390; }
+  html.gl-system .glpv-ds-error { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
+  html.gl-system .glpv-ds-content .glpv-pipeline-list { border-color: #2d333b; }
 }
 
 /* ── Dark mode: GitLab native ───────────────────────────────────────────── */
@@ -620,6 +630,7 @@ html.gl-dark .glpv-col-started,
 html.gl-dark .glpv-col-runner      { color: #768390; }
 html.gl-dark .glpv-job-link        { color: #cdd9e5; }
 html.gl-dark .glpv-job-link:hover  { color: #58a6ff; }
+html.gl-dark .glpv-failure-reason   { color: #ff7b72; }
 html.gl-dark .glpv-badge-optional  { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
 html.gl-dark .glpv-loading         { color: #768390; }
