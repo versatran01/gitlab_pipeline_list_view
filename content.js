@@ -77,6 +77,57 @@
     return `${s}s`;
   }
 
+  // Statuses whose wait GitLab reports as `queued_duration`.
+  const QUEUED_STATUSES = new Set(['pending', 'waiting_for_resource', 'preparing']);
+
+  // What a job's Duration cell shows, as of `now` (ms): `seconds` (null →
+  // "-"), a text `prefix`, and whether it keeps counting (`live`) until the
+  // next fetch. GitLab reports a running job's elapsed time in `duration`.
+  function jobTiming(job, now) {
+    if (job.status === 'running') {
+      const secs = job.duration ??
+        (job.started_at ? (now - Date.parse(job.started_at)) / 1000 : null);
+      return { seconds: secs, prefix: '', live: secs != null };
+    }
+    if (QUEUED_STATUSES.has(job.status) && job.queued_duration != null) {
+      return { seconds: job.queued_duration, prefix: 'queued ', live: true };
+    }
+    return { seconds: job.duration, prefix: '', live: false };
+  }
+
+  // Same for a pipeline. Its `duration` is only set once it finishes, so an
+  // active pipeline counts from `started_at`.
+  function pipelineTiming(pipeline, now) {
+    if (ACTIVE_STATUSES.has(pipeline.status)) {
+      if (!pipeline.started_at) return null;
+      return { seconds: (now - Date.parse(pipeline.started_at)) / 1000, prefix: '', live: true };
+    }
+    return pipeline.duration ? { seconds: pipeline.duration, prefix: '', live: false } : null;
+  }
+
+  // An element showing `label` + timing. Live ones carry the seconds and the
+  // time they were measured, and tickLive keeps their text current.
+  function timingEl(tag, className, timing, label = '') {
+    const text = label + timing.prefix;
+    const node = el(tag, className, text + formatDuration(timing.seconds));
+    if (timing.live) {
+      node.dataset.liveSecs = String(timing.seconds);
+      node.dataset.liveFrom = String(Date.now());
+      node.dataset.liveText = text;
+    }
+    return node;
+  }
+
+  function tickLive() {
+    const root = document.getElementById('glpv-root');
+    if (!root || document.hidden) return;
+    const now = Date.now();
+    for (const node of root.querySelectorAll('[data-live-secs]')) {
+      const secs = Number(node.dataset.liveSecs) + (now - Number(node.dataset.liveFrom)) / 1000;
+      node.textContent = node.dataset.liveText + formatDuration(secs);
+    }
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleString(undefined, {
@@ -550,11 +601,13 @@
 
         let metaText = `Pipeline #${pipeline.id}`;
         if (pipeline.ref) metaText += ` · ${pipeline.ref}`;
-        if (pipeline.duration) metaText += ` · ${formatDuration(pipeline.duration)}`;
+        const timing = pipelineTiming(pipeline, Date.now());
 
         header.appendChild(statusBadge(pipeline.status));
         header.appendChild(projLink);
-        header.appendChild(el('span', 'glpv-ds-meta', metaText));
+        const meta = el('span', 'glpv-ds-meta', metaText);
+        if (timing) meta.appendChild(timingEl('span', '', timing, ' · '));
+        header.appendChild(meta);
         header.append(...makePipelineActionBtns(dpBase, downstream.project_id, pipeline));
 
         const nested = buildListView(pipeline, djobs, dbridges, depth + 1);
@@ -672,7 +725,7 @@
     tr.appendChild(tdStatus);
     tr.appendChild(tdName);
     tr.appendChild(el('td', 'glpv-col-started', formatDate(job.started_at) || '-'));
-    tr.appendChild(el('td', 'glpv-col-duration', formatDuration(job.duration)));
+    tr.appendChild(timingEl('td', 'glpv-col-duration', jobTiming(job, Date.now())));
     tr.appendChild(el('td', 'glpv-col-runner',
       job.runner ? (job.runner.description || `#${job.runner.id}`) : '-'));
     attachJobActions(tr, job);
@@ -810,11 +863,14 @@
         ${pipeline.started_at
           ? `<span class="glpv-summary-meta">Started ${escHtml(formatDate(pipeline.started_at))}</span>`
           : ''}
-        ${pipeline.duration
-          ? `<span class="glpv-summary-meta">Duration: ${escHtml(formatDuration(pipeline.duration))}</span>`
-          : ''}
-        <span class="glpv-summary-meta">${totalItems} job${totalItems !== 1 ? 's' : ''} · ${stagesMap.size} stage${stagesMap.size !== 1 ? 's' : ''}</span>
+        <span class="glpv-summary-meta glpv-summary-count">${totalItems} job${totalItems !== 1 ? 's' : ''} · ${stagesMap.size} stage${stagesMap.size !== 1 ? 's' : ''}</span>
       `;
+
+      const timing = pipelineTiming(pipeline, Date.now());
+      if (timing) {
+        summary.querySelector('.glpv-summary-count').before(
+          timingEl('span', 'glpv-summary-meta', timing, 'Duration: '));
+      }
 
       const actions = document.createElement('div');
       actions.className = 'glpv-summary-actions';
@@ -1043,7 +1099,9 @@
   function afterRender(pipeline) {
     refresh.lastStatus = pipeline.status;
     updateUpdatedLabel();
-    if (!refresh.ticker) refresh.ticker = setInterval(updateUpdatedLabel, 5000);
+    if (!refresh.ticker) {
+      refresh.ticker = setInterval(() => { updateUpdatedLabel(); tickLive(); }, 1000);
+    }
     scheduleRefresh();
   }
 
@@ -1138,7 +1196,7 @@
     module.exports = {
       formatDuration, formatFailureReason, retryDelay, latestAttempts,
       stageStatus, buildStageMap, rowMatchesFilter, filterActive,
-      mapLimit, fetchPaged, loadDownstream,
+      mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
     };
     return;
   }
