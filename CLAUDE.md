@@ -42,8 +42,10 @@ There is no build step, no bundler, and no package manager. All files are plain 
 - Expand/collapse of downstream pipelines is lazy: the API fetch only fires on first expand. `setupExpand` registers each button's expand function in the `expanders` WeakMap so a refresh can re-open and await them.
 - **Auto refresh:** while the root pipeline status is in `ACTIVE_STATUSES`, `refreshListView` re-fetches every `REFRESH_MS`, builds the new tree off-DOM with previously expanded downstreams re-loaded (`buildRoot` → `restoreExpanded`), then swaps it in. Paused while the tab is hidden or the graph view is shown (catches up on return); a failed refresh keeps the old view. Playing/retrying a job triggers a refresh via `requestRefresh`. `refresh.seq` is bumped in `cleanup()` so in-flight refreshes for a previous pipeline are dropped.
 - A failed initial load renders an error box with a Retry button and is never reused by the toggle.
-- Navigation on GitLab's SPA is detected by patching `history.pushState/replaceState` and listening to `popstate`.
-- A `MutationObserver` on `document.body` re-injects the toggle button if GitLab re-renders the pipeline header.
+- Navigation on GitLab's SPA is detected by comparing `location.pathname` on the Navigation API's `currententrychange`, `popstate`, and DOM mutations (patching `history.pushState` doesn't work from the content script's isolated world).
+- A debounced `MutationObserver` on `document.body` re-injects the toggle button if GitLab re-renders the pipeline header.
+- Stages are ordered by their lowest job/bridge id (the API order isn't stage order).
+- Dark styles apply for `html.gl-dark`, or `html.gl-system` (GitLab "Auto" color mode) with a dark OS theme.
 
 ### Storage keys
 

@@ -78,6 +78,11 @@
     });
   }
 
+  // GitLab's failure_reason enum ("script_failure") → "script failure".
+  function formatFailureReason(reason) {
+    return String(reason).replace(/_/g, ' ');
+  }
+
   function escHtml(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -392,7 +397,10 @@
     for (const items of map.values()) {
       items.sort((a, b) => a.id - b.id);
     }
-    return map;
+    // The API's order isn't the pipeline's stage order (and bridges were
+    // appended last); jobs are created stage by stage, so order stages by
+    // their lowest id.
+    return new Map([...map].sort((a, b) => a[1][0].id - b[1][0].id));
   }
 
   // ── Downstream expand logic ───────────────────────────────────────────────
@@ -757,6 +765,9 @@
               ${job._attempts > 1
                 ? `<span class="glpv-badge-optional" title="Showing the latest of ${job._attempts} attempts">${job._attempts} attempts</span>`
                 : ''}
+              ${job.status === 'failed' && job.failure_reason
+                ? `<span class="glpv-failure-reason" title="Failure reason">${escHtml(formatFailureReason(job.failure_reason))}</span>`
+                : ''}
             </td>
             <td class="glpv-col-started">${escHtml(formatDate(job.started_at)) || '-'}</td>
             <td class="glpv-col-duration">${escHtml(formatDuration(job.duration))}</td>
@@ -1074,21 +1085,37 @@
     });
   }
 
-  function handleNavigation() {
+  // Content scripts run in an isolated world, so patching history.pushState
+  // here wouldn't see GitLab's own calls. Instead, compare the path whenever
+  // the Navigation API reports a URL change (or popstate / a DOM mutation,
+  // as a fallback) and start over when it changed.
+  let lastPath = window.location.pathname;
+
+  function checkNavigation() {
+    if (window.location.pathname === lastPath) return false;
+    lastPath = window.location.pathname;
     cleanup();
     setTimeout(injectListView, 600);
+    return true;
   }
 
-  const origPush    = history.pushState.bind(history);
-  const origReplace = history.replaceState.bind(history);
-  history.pushState = function (...args) { origPush(...args); handleNavigation(); };
-  history.replaceState = function (...args) { origReplace(...args); handleNavigation(); };
-  window.addEventListener('popstate', handleNavigation);
+  window.navigation?.addEventListener('currententrychange', checkNavigation);
+  window.addEventListener('popstate', checkNavigation);
+
+  // GitLab mutates the DOM constantly; handle a burst of mutations once.
+  let observerQueued = false;
+  function onMutations() {
+    observerQueued = false;
+    if (checkNavigation()) return;
+    if (getPageInfo() && !document.getElementById('glpv-toggle')) injectListView();
+  }
 
   function startObserver() {
     if (state.observer) state.observer.disconnect();
     state.observer = new MutationObserver(() => {
-      if (getPageInfo() && !document.getElementById('glpv-toggle')) injectListView();
+      if (observerQueued) return;
+      observerQueued = true;
+      setTimeout(onMutations, 100);
     });
     state.observer.observe(document.body, { childList: true, subtree: true });
   }
