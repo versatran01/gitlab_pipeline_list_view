@@ -45,6 +45,7 @@ There is no build step, no bundler, and no package manager. All files are plain 
 | Key | Type | Purpose |
 |---|---|---|
 | `glpv_auto_list_view` | boolean | Activate list view automatically on page load |
+| `glpv_auto_expand` | boolean | Automatically expand all downstream pipelines when the list view loads |
 | `glpv_instances` | string[] | Origins of registered self-hosted GitLab instances |
 
 ### Permissions model
