@@ -126,8 +126,15 @@
 
 /* ── Expand All / Collapse All button (in summary bar) ──────────────────── */
 
-.glpv-expand-all-btn {
+.glpv-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.glpv-expand-all-btn,
+.glpv-action-btn {
   padding: 3px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -141,7 +148,8 @@
   flex-shrink: 0;
 }
 
-.glpv-expand-all-btn:hover {
+.glpv-expand-all-btn:hover,
+.glpv-action-btn:hover:not(:disabled) {
   background: #e9f0f9;
   border-color: #1f75cb;
 }
@@ -346,6 +354,52 @@
   background: #fde0db;
 }
 
+/* ── Retry button (failed/canceled jobs) and refresh state ──────────────── */
+
+.glpv-retry-btn {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1f75cb;
+  background: transparent;
+  border: 1px solid #c4d5ec;
+  border-radius: 10px;
+  cursor: pointer;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.glpv-retry-btn:hover:not(:disabled) {
+  background: #e9f0f9;
+  border-color: #1f75cb;
+}
+
+.glpv-action-btn:disabled,
+.glpv-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.glpv-retry-btn--error,
+.glpv-action-btn--error {
+  color: #db3b21;
+  border-color: #db3b21;
+}
+
+.glpv-refresh-btn--busy {
+  animation: glpv-spin 0.8s linear infinite;
+}
+
+.glpv-updated--error {
+  color: #db3b21;
+}
+
+.glpv-error-retry {
+  display: block;
+  margin-top: 8px;
+}
+
 /* ── Expand button (on bridge/trigger job rows) ──────────────────────────── */
 
 .glpv-expand-btn {
@@ -441,6 +495,10 @@
   padding: 6px 0 8px;
 }
 
+.glpv-ds-header .glpv-action-btn {
+  margin-left: auto;
+}
+
 .glpv-ds-proj-link {
   font-size: 12px;
   font-weight: 600;
@@ -521,8 +579,13 @@
   .glpv-play-btn:hover  { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
   .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
   /* Expand All button */
-  .glpv-expand-all-btn  { color: #58a6ff; border-color: #2d4a7a; }
-  .glpv-expand-all-btn:hover { background: #1c2d55; border-color: #58a6ff; }
+  .glpv-expand-all-btn, .glpv-action-btn,
+  .glpv-retry-btn       { color: #58a6ff; border-color: #2d4a7a; }
+  .glpv-expand-all-btn:hover,
+  .glpv-action-btn:hover:not(:disabled),
+  .glpv-retry-btn:hover:not(:disabled) { background: #1c2d55; border-color: #58a6ff; }
+  .glpv-retry-btn--error, .glpv-action-btn--error,
+  .glpv-updated--error  { color: #ff7b72; border-color: #8b2020; }
   /* Expand & downstream */
   .glpv-expand-btn      { color: #768390; border-color: #444c56; }
   .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }
@@ -569,8 +632,15 @@ html.gl-dark .glpv-play-btn        { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-play-btn:hover  { color: #58a6ff; background: #1c2d55; border-color: #58a6ff; }
 html.gl-dark .glpv-play-btn--error { color: #ff7b72; border-color: #8b2020; background: #2a1010; }
 /* Expand All button */
-html.gl-dark .glpv-expand-all-btn  { color: #58a6ff; border-color: #2d4a7a; }
-html.gl-dark .glpv-expand-all-btn:hover { background: #1c2d55; border-color: #58a6ff; }
+html.gl-dark .glpv-expand-all-btn,
+html.gl-dark .glpv-action-btn,
+html.gl-dark .glpv-retry-btn       { color: #58a6ff; border-color: #2d4a7a; }
+html.gl-dark .glpv-expand-all-btn:hover,
+html.gl-dark .glpv-action-btn:hover:not(:disabled),
+html.gl-dark .glpv-retry-btn:hover:not(:disabled) { background: #1c2d55; border-color: #58a6ff; }
+html.gl-dark .glpv-retry-btn--error,
+html.gl-dark .glpv-action-btn--error,
+html.gl-dark .glpv-updated--error  { color: #ff7b72; border-color: #8b2020; }
 /* Expand & downstream */
 html.gl-dark .glpv-expand-btn      { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-expand-btn:hover { background: #2d333b; border-color: #768390; color: #cdd9e5; }

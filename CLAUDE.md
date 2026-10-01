@@ -36,7 +36,12 @@ There is no build step, no bundler, and no package manager. All files are plain 
 - `fetchAllBridges` + `fetchAllJobs` both paginate via `X-Total-Pages` header.
 - `buildStageMap` merges regular jobs and trigger/bridge jobs into a `Map` keyed by stage name; bridges carry `_isBridge: true`.
 - `buildListView` is called recursively for downstream (child) pipelines with a `depth` argument — depth 0 adds the summary bar.
-- Expand/collapse of downstream pipelines is lazy: the API fetch only fires on first expand.
+- `apiFetch` (GETs only) retries network errors, 429 and 5xx up to 3 times with backoff (honouring `Retry-After`); play/retry POSTs (`apiPost`) are never repeated automatically.
+- Jobs are fetched with `include_retried=true`; `latestAttempts` keeps only the newest attempt per job name, so stage rollups and counts reflect the current state and rows show an "N attempts" badge.
+- Failed/canceled jobs get a per-row **Retry** button (`POST /jobs/:id/retry`); failed/canceled pipelines (root summary and downstream headers) get **Retry failed** (`POST /pipelines/:id/retry`).
+- Expand/collapse of downstream pipelines is lazy: the API fetch only fires on first expand. `setupExpand` registers each button's expand function in the `expanders` WeakMap so a refresh can re-open and await them.
+- **Auto refresh:** while the root pipeline status is in `ACTIVE_STATUSES`, `refreshListView` re-fetches every `REFRESH_MS`, builds the new tree off-DOM with previously expanded downstreams re-loaded (`buildRoot` → `restoreExpanded`), then swaps it in. Paused while the tab is hidden or the graph view is shown (catches up on return); a failed refresh keeps the old view. Playing/retrying a job triggers a refresh via `requestRefresh`. `refresh.seq` is bumped in `cleanup()` so in-flight refreshes for a previous pipeline are dropped.
+- A failed initial load renders an error box with a Retry button and is never reused by the toggle.
 - Navigation on GitLab's SPA is detected by patching `history.pushState/replaceState` and listening to `popstate`.
 - A `MutationObserver` on `document.body` re-injects the toggle button if GitLab re-renders the pipeline header.
 
