@@ -5,7 +5,7 @@ const {
   formatDuration, formatFailureReason, retryDelay, latestAttempts,
   stageStatus, buildStageMap, rowMatchesFilter, filterActive,
   mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
-  defaultCollapsed, logTail,
+  defaultCollapsed, logTail, limiter,
 } = require('../content.js');
 
 test('formatDuration', () => {
@@ -66,6 +66,18 @@ test('buildStageMap orders stages by lowest id and merges bridges', () => {
   assert.deepEqual(map.get('build').map(j => j.id), [10, 11, 12]);
   assert.equal(map.get('build')[1]._isBridge, true);
   assert.equal(map.get('build')[0]._isBridge, undefined);
+});
+
+test('buildStageMap keeps a fully retried stage in place', () => {
+  const all = [
+    { id: 1, name: 'build', stage: 'build' },
+    { id: 2, name: 'test', stage: 'test' },
+    { id: 3, name: 'deploy', stage: 'deploy' },
+    { id: 4, name: 'test', stage: 'test' }, // retry of `test`
+  ];
+  const map = buildStageMap(latestAttempts(all), [], all);
+  assert.deepEqual([...map.keys()], ['build', 'test', 'deploy']);
+  assert.equal(map.get('test')[0].id, 4);
 });
 
 test('rowMatchesFilter / filterActive', () => {
@@ -217,4 +229,27 @@ test('logTail strips ANSI codes and section markers, keeps the last lines', () =
   assert.equal(logTail(raw, 2), 'Downloading 100%\nERROR: 3 tests failed');
   assert.equal(logTail('line\r\n', 5), 'line');
   assert.equal(logTail('', 5), '');
+});
+
+test('logTail only looks at the end of a huge log', () => {
+  const raw = 'x'.repeat(1024 * 1024) + '\npartial-line-' + 'y'.repeat(300 * 1024) +
+    '\n' + 'last line\n';
+  assert.equal(logTail(raw, 5), 'last line');
+});
+
+test('limiter caps concurrent calls and passes results/errors through', async () => {
+  const run = limiter(2);
+  let inFlight = 0;
+  let peak = 0;
+  const task = n => run(async () => {
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await new Promise(r => setTimeout(r, 5));
+    inFlight--;
+    if (n === 3) throw new Error('boom');
+    return n;
+  });
+  const results = await Promise.allSettled([1, 2, 3, 4, 5].map(task));
+  assert.equal(peak, 2);
+  assert.deepEqual(results.map(r => r.value ?? r.reason.message), [1, 2, 'boom', 4, 5]);
 });
