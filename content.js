@@ -21,6 +21,9 @@
   const MAX_RETRY_DELAY_MS = 10000;
   // Remaining result pages are fetched in parallel, this many at a time.
   const PAGE_CONCURRENCY = 4;
+  // Downstream pipelines loaded at once (each is 3+ requests) — "Expand All"
+  // on a pipeline with many trigger jobs would otherwise hit rate limits.
+  const DS_CONCURRENCY = 4;
 
   let expandAllActive = false;
 
@@ -31,6 +34,9 @@
     ticker: null,
     seq: 0,
     inFlight: false,
+    // A refresh was asked for while one was in flight (which may have read
+    // the pipeline before the action that asked) — run it once that ends.
+    queued: false,
     pendingWhileHidden: false,
     lastStatus: null,
   };
@@ -42,6 +48,14 @@
   // Data of finished downstream pipelines, reused by refreshes instead of
   // re-fetching. Keyed by dsCacheKey, which changes when the downstream does.
   const dsCache = new Map();
+  // Bumped by clearDsCache, so a load that started before the clear doesn't
+  // put its (possibly stale) result back.
+  let dsCacheGen = 0;
+
+  function clearDsCache() {
+    dsCache.clear();
+    dsCacheGen++;
+  }
 
   // Stages the user collapsed/expanded by hand ("<pipeline id>:<stage>" →
   // collapsed?). Survives refreshes; otherwise defaultCollapsed decides.
@@ -52,6 +66,9 @@
   const openLogs = new Set();
   const logCache = new Map();
   const LOG_TAIL_LINES = 30;
+  // How much of the end of a log logTail looks at — GitLab can't send just
+  // the tail, but there's no need to clean up a 50MB log to show 30 lines.
+  const LOG_TAIL_CHARS = 256 * 1024;
 
   const state = {
     pipelineId: null,
@@ -248,6 +265,30 @@
     return results;
   }
 
+  // Returns `run(fn)`, which calls `fn` once fewer than `max` earlier calls
+  // are still pending, and resolves with its result.
+  function limiter(max) {
+    let active = 0;
+    const waiting = [];
+    const next = () => {
+      if (active < max && waiting.length) {
+        active++;
+        waiting.shift()();
+      }
+    };
+    return async fn => {
+      await new Promise(resolve => { waiting.push(resolve); next(); });
+      try {
+        return await fn();
+      } finally {
+        active--;
+        next();
+      }
+    };
+  }
+
+  const dsLimit = limiter(DS_CONCURRENCY);
+
   // Page 1 tells us the page count (X-Total-Pages); the rest are fetched in
   // parallel. GitLab omits that header for very large result sets, so then
   // fall back to following X-Next-Page one page at a time.
@@ -323,6 +364,11 @@
   // ANSI escapes and GitLab's collapsible-section markers removed, and
   // carriage-return overwrites (progress bars) resolved to what's shown.
   function logTail(raw, n) {
+    // Only the end matters; drop the (probably cut) first line of the slice.
+    if (raw.length > LOG_TAIL_CHARS) {
+      raw = raw.slice(-LOG_TAIL_CHARS);
+      raw = raw.slice(raw.indexOf('\n') + 1);
+    }
     const lines = raw
       .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
       .replace(/section_(?:start|end):\d+:[^\r\n]*?\r/g, '')
@@ -344,6 +390,10 @@
     const tail = logTail(await res.text(), LOG_TAIL_LINES);
     logCache.set(job.id, tail);
     return tail;
+  }
+
+  function scrollLogsToEnd(container) {
+    for (const pre of container.querySelectorAll('.glpv-log')) pre.scrollTop = pre.scrollHeight;
   }
 
   // "Log" button on a failed job: toggles a row under it with the end of
@@ -373,7 +423,9 @@
         const full = el('a', 'glpv-log-full', 'Open full log →');
         full.href = job.web_url;
         cell.replaceChildren(pre, full);
-        pre.scrollTop = pre.scrollHeight;
+        // Off-DOM (a refresh being built) this is a no-op; refreshListView
+        // scrolls again after the swap.
+        scrollLogsToEnd(cell);
       } catch (err) {
         loaded = false;
         const msg = el('div', 'glpv-log-status glpv-log-status--error',
@@ -600,7 +652,10 @@
     return [...byName.values()];
   }
 
-  function buildStageMap(jobs, bridges) {
+  // `allJobs` (every attempt, before latestAttempts) only decides the stage
+  // order: a retry gets a new, higher id, so ordering by the latest attempts
+  // alone would push a fully retried stage after the ones that followed it.
+  function buildStageMap(jobs, bridges, allJobs = jobs) {
     const map = new Map();
     for (const job of jobs) {
       const stage = job.stage || 'unknown';
@@ -618,7 +673,12 @@
     // The API's order isn't the pipeline's stage order (and bridges were
     // appended last); jobs are created stage by stage, so order stages by
     // their lowest id.
-    return new Map([...map].sort((a, b) => a[1][0].id - b[1][0].id));
+    const firstId = new Map();
+    for (const item of [...allJobs, ...bridges]) {
+      const stage = item.stage || 'unknown';
+      firstId.set(stage, Math.min(firstId.get(stage) ?? Infinity, item.id));
+    }
+    return new Map([...map].sort((a, b) => firstId.get(a[0]) - firstId.get(b[0])));
   }
 
   // ── Downstream expand logic ───────────────────────────────────────────────
@@ -652,12 +712,14 @@
     const key = dsCacheKey(downstream);
     const cached = dsCache.get(key);
     if (cached) return cached;
-    const data = await Promise.all([
+    const gen = dsCacheGen;
+    const data = await dsLimit(() => Promise.all([
       fetchPipeline(dpBase, downstream.project_id, downstream.id),
       fetchAllJobs(dpBase, downstream.project_id, downstream.id),
       fetchAllBridges(dpBase, downstream.project_id, downstream.id),
-    ]);
-    if (!ACTIVE_STATUSES.has(downstream.status) && !ACTIVE_STATUSES.has(data[0].status)) {
+    ]));
+    if (gen === dsCacheGen &&
+        !ACTIVE_STATUSES.has(downstream.status) && !ACTIVE_STATUSES.has(data[0].status)) {
       dsCache.set(key, data);
     }
     return data;
@@ -952,9 +1014,10 @@
   function buildListView(pipeline, jobs, bridges, depth) {
     bridges = bridges || [];
     depth = depth || 0;
-    jobs = latestAttempts(jobs || []);
+    const allJobs = jobs || [];
+    jobs = latestAttempts(allJobs);
 
-    const stagesMap = buildStageMap(jobs, bridges);
+    const stagesMap = buildStageMap(jobs, bridges, allJobs);
     const totalItems = jobs.length + bridges.length;
 
     const root = document.createElement('div');
@@ -1237,11 +1300,21 @@
     scheduleRefresh();
   }
 
+  // Whether the root pipeline, or a downstream of any trigger job shown
+  // (expanded or not), can still change. A child triggered without
+  // `strategy: depend` keeps running after its parent finished.
+  function anythingActive() {
+    if (ACTIVE_STATUSES.has(refresh.lastStatus)) return true;
+    const root = document.getElementById('glpv-root');
+    return !!root && [...root.querySelectorAll('tr[data-ds-status]')]
+      .some(tr => ACTIVE_STATUSES.has(tr.dataset.dsStatus));
+  }
+
   // Next automatic refresh — only while the pipeline can still change.
   function scheduleRefresh() {
     clearTimeout(refresh.timer);
     refresh.timer = null;
-    if (!ACTIVE_STATUSES.has(refresh.lastStatus)) return;
+    if (!anythingActive()) return;
     refresh.timer = setTimeout(() => refreshListView({ auto: true }), REFRESH_MS);
   }
 
@@ -1250,7 +1323,7 @@
   function requestRefresh(delay) {
     // An action may have restarted a finished downstream before its parent
     // bridge reflects that, so don't trust the cache this time.
-    dsCache.clear();
+    clearDsCache();
     clearTimeout(refresh.timer);
     refresh.timer = setTimeout(() => refreshListView(), delay);
   }
@@ -1288,7 +1361,12 @@
       refresh.pendingWhileHidden = true;
       return;
     }
-    if (refresh.inFlight) return;
+    if (refresh.inFlight) {
+      // An automatic one can wait for the next tick; anything else (an
+      // action, the refresh button) must see what happened since.
+      if (!auto) refresh.queued = true;
+      return;
+    }
     refresh.inFlight = true;
     const seq = refresh.seq;
     setRefreshing(current, true);
@@ -1303,6 +1381,7 @@
       const hadFocus = document.activeElement === oldInput;
       root.style.display = now.style.display;
       now.replaceWith(root);
+      scrollLogsToEnd(root);
       syncFilterBar(root, hadFocus ? oldInput : null);
       restoreExpanded(root, openNow);
       afterRender(pipeline);
@@ -1318,7 +1397,13 @@
       }
       scheduleRefresh();
     } finally {
-      if (seq === refresh.seq) refresh.inFlight = false;
+      if (seq === refresh.seq) {
+        refresh.inFlight = false;
+        if (refresh.queued) {
+          refresh.queued = false;
+          refreshListView();
+        }
+      }
     }
   }
 
@@ -1329,7 +1414,7 @@
       formatDuration, formatFailureReason, retryDelay, latestAttempts,
       stageStatus, buildStageMap, rowMatchesFilter, filterActive,
       mapLimit, fetchPaged, loadDownstream, jobTiming, pipelineTiming,
-      defaultCollapsed, logTail,
+      defaultCollapsed, logTail, limiter,
     };
     return;
   }
@@ -1402,7 +1487,7 @@
 
   function cleanup() {
     expandAllActive = false;
-    dsCache.clear();
+    clearDsCache();
     stageOverrides.clear();
     openLogs.clear();
     logCache.clear();
@@ -1411,7 +1496,7 @@
     clearInterval(refresh.ticker);
     Object.assign(refresh, {
       timer: null, ticker: null, seq: refresh.seq + 1, inFlight: false,
-      pendingWhileHidden: false, lastStatus: null,
+      queued: false, pendingWhileHidden: false, lastStatus: null,
     });
     document.getElementById('glpv-toggle')?.remove();
     document.getElementById('glpv-root')?.remove();
