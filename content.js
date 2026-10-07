@@ -906,11 +906,27 @@
 
   // ── Job filter ────────────────────────────────────────────────────────────
 
+  // Status chips in the filter bar; selected ones are OR-combined.
+  const STATUS_GROUPS = {
+    failed: { label: 'Failed', statuses: new Set(['failed']) },
+    running: {
+      label: 'Running',
+      title: 'Running or queued',
+      statuses: new Set(['running', 'pending', 'preparing', 'waiting_for_resource', 'canceling']),
+    },
+  };
+
   // Kept across refreshes; reset on navigation.
-  const filter = { text: '', failedOnly: false };
+  const filter = { text: '', statuses: new Set() };
 
   function filterActive(f) {
-    return !!f.text.trim() || f.failedOnly;
+    return !!f.text.trim() || f.statuses.size > 0;
+  }
+
+  // Whether a row (its own or its downstream's status) is in `group`.
+  function rowInGroup(row, group) {
+    const { statuses } = STATUS_GROUPS[group];
+    return statuses.has(row.status) || statuses.has(row.dsStatus);
   }
 
   // When a pipeline has a failed stage, its fully passed stages start
@@ -932,14 +948,16 @@
   function rowMatchesFilter(row, f) {
     const needle = f.text.trim().toLowerCase();
     if (needle && !row.name.includes(needle)) return false;
-    if (f.failedOnly && row.status !== 'failed' && row.dsStatus !== 'failed') return false;
+    if (f.statuses.size && ![...f.statuses].some(g => rowInGroup(row, g))) return false;
     return true;
   }
 
   // Hide the rows (then stages) under `list` that don't match and return how
   // many stayed visible. Loaded downstream lists are filtered too, and a
-  // trigger job stays visible while anything below it matches.
-  function filterList(list) {
+  // trigger job stays visible while anything below it matches. Adds each
+  // row's status groups to `counts` (ignoring the filter); a trigger job
+  // whose downstream is loaded is counted through that downstream's jobs.
+  function filterList(list, counts) {
     let visible = 0;
     for (const stage of list.querySelectorAll(':scope > .glpv-stage')) {
       let stageVisible = 0;
@@ -948,7 +966,10 @@
         const next = tr.nextElementSibling;
         const extra = next?.matches('.glpv-ds-row, .glpv-log-row') ? next : null;
         const nested = extra?.querySelector('.glpv-pipeline-list');
-        const nestedVisible = nested ? filterList(nested) : 0;
+        const nestedVisible = nested ? filterList(nested, counts) : 0;
+        if (!nested) {
+          for (const g in counts) if (rowInGroup(tr.dataset, g)) counts[g]++;
+        }
         const show = rowMatchesFilter(tr.dataset, filter) || nestedVisible > 0;
         tr.classList.toggle('glpv-filtered', !show);
         extra?.classList.toggle('glpv-filtered', !show);
@@ -964,7 +985,13 @@
 
   function applyFilter(root) {
     if (!root) return;
-    const visible = filterList(root);
+    const counts = Object.fromEntries(Object.keys(STATUS_GROUPS).map(g => [g, 0]));
+    const visible = filterList(root, counts);
+    for (const chip of root.querySelectorAll('.glpv-filter-chip')) {
+      const n = counts[chip.dataset.group];
+      chip.querySelector('.glpv-filter-count').textContent = n;
+      chip.classList.toggle('glpv-filter-chip--empty', n === 0);
+    }
     const empty = root.querySelector(':scope > .glpv-filter-empty');
     if (empty) empty.hidden = !filterActive(filter) || visible > 0;
   }
@@ -981,17 +1008,22 @@
       applyFilter(root);
     });
 
-    const label = el('label', 'glpv-filter-failed');
-    const failedOnly = el('input');
-    failedOnly.type = 'checkbox';
-    failedOnly.checked = filter.failedOnly;
-    failedOnly.addEventListener('change', () => {
-      filter.failedOnly = failedOnly.checked;
-      applyFilter(root);
+    const chips = Object.entries(STATUS_GROUPS).map(([group, { label, title }]) => {
+      const chip = el('button', `glpv-filter-chip glpv-filter-chip--${group}`);
+      chip.type = 'button';
+      chip.dataset.group = group;
+      if (title) chip.title = title;
+      chip.setAttribute('aria-pressed', String(filter.statuses.has(group)));
+      chip.append(label, el('span', 'glpv-filter-count'));
+      chip.addEventListener('click', () => {
+        if (!filter.statuses.delete(group)) filter.statuses.add(group);
+        chip.setAttribute('aria-pressed', String(filter.statuses.has(group)));
+        applyFilter(root);
+      });
+      return chip;
     });
-    label.append(failedOnly, 'Failed only');
 
-    bar.append(input, label);
+    bar.append(input, ...chips);
     return bar;
   }
 
@@ -999,9 +1031,10 @@
   // built, so re-sync the controls, re-filter, and keep the input's focus.
   function syncFilterBar(root, oldInput) {
     const input = root.querySelector('.glpv-filter-input');
-    const failedOnly = root.querySelector('.glpv-filter-failed input');
     if (input) input.value = filter.text;
-    if (failedOnly) failedOnly.checked = filter.failedOnly;
+    for (const chip of root.querySelectorAll('.glpv-filter-chip')) {
+      chip.setAttribute('aria-pressed', String(filter.statuses.has(chip.dataset.group)));
+    }
     applyFilter(root);
     if (input && oldInput && document.activeElement === document.body) {
       input.focus();
@@ -1491,7 +1524,7 @@
     stageOverrides.clear();
     openLogs.clear();
     logCache.clear();
-    Object.assign(filter, { text: '', failedOnly: false });
+    Object.assign(filter, { text: '', statuses: new Set() });
     clearTimeout(refresh.timer);
     clearInterval(refresh.ticker);
     Object.assign(refresh, {

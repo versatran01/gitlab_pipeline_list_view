@@ -115,16 +115,32 @@
   border-radius: 4px;
 }
 
-.glpv-filter-failed {
+.glpv-filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin: 0;
+  padding: 2px 10px;
   font-size: 12px;
-  font-weight: normal;
   color: #6a737d;
+  background: transparent;
+  border: 1px solid #c4c9d0;
+  border-radius: 12px;
   cursor: pointer;
 }
+
+.glpv-filter-chip + .glpv-filter-chip { margin-left: -6px; }
+.glpv-filter-chip:hover { border-color: #868e96; }
+
+.glpv-filter-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.glpv-filter-chip--empty .glpv-filter-count { opacity: 0.5; }
+
+.glpv-filter-chip--failed[aria-pressed="true"]  { background: #fde0db; color: #b22518; border-color: #db3b21; }
+.glpv-filter-chip--running[aria-pressed="true"] { background: #ddeeff; color: #1357a6; border-color: #1f75cb; }
 
 .glpv-filter-empty {
   padding: 16px;
@@ -694,7 +710,9 @@
   html.gl-system .glpv-error { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
   html.gl-system .glpv-filter-bar { border-color: #373e47; }
   html.gl-system .glpv-filter-input { border-color: #444c56; }
-  html.gl-system .glpv-filter-failed,
+  html.gl-system .glpv-filter-chip { color: #768390; border-color: #444c56; }
+  html.gl-system .glpv-filter-chip--failed[aria-pressed="true"] { background: #3d1a16; color: #ff7b72; border-color: #db3b21; }
+  html.gl-system .glpv-filter-chip--running[aria-pressed="true"] { background: #13253d; color: #58a6ff; border-color: #388bfd; }
   html.gl-system .glpv-filter-empty { color: #768390; }
   html.gl-system .glpv-loading { color: #768390; }
   html.gl-system #glpv-toggle { color: #58a6ff; border-color: #388bfd; }
@@ -758,7 +776,9 @@ html.gl-dark .glpv-badge-optional  { color: #768390; border-color: #444c56; }
 html.gl-dark .glpv-error           { background: #2a1010; border-color: #8b2020; color: #ff7b72; }
 html.gl-dark .glpv-filter-bar      { border-color: #373e47; }
 html.gl-dark .glpv-filter-input    { border-color: #444c56; }
-html.gl-dark .glpv-filter-failed,
+html.gl-dark .glpv-filter-chip     { color: #768390; border-color: #444c56; }
+html.gl-dark .glpv-filter-chip--failed[aria-pressed="true"]  { background: #3d1a16; color: #ff7b72; border-color: #db3b21; }
+html.gl-dark .glpv-filter-chip--running[aria-pressed="true"] { background: #13253d; color: #58a6ff; border-color: #388bfd; }
 html.gl-dark .glpv-filter-empty    { color: #768390; }
 html.gl-dark .glpv-loading         { color: #768390; }
 html.gl-dark #glpv-toggle          { color: #58a6ff; border-color: #388bfd; }

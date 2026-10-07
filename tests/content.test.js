@@ -82,21 +82,33 @@ test('buildStageMap keeps a fully retried stage in place', () => {
 
 test('rowMatchesFilter / filterActive', () => {
   const row = { name: 'rspec unit 1/4', status: 'failed' };
-  const f = (text, failedOnly = false) => ({ text, failedOnly });
+  const f = (text, ...statuses) => ({ text, statuses: new Set(statuses) });
 
   assert.equal(filterActive(f('')), false);
   assert.equal(filterActive(f('  ')), false);
-  assert.equal(filterActive(f('', true)), true);
+  assert.equal(filterActive(f('', 'failed')), true);
 
   assert.equal(rowMatchesFilter(row, f('')), true);
   assert.equal(rowMatchesFilter(row, f('  RSpec ')), true);
   assert.equal(rowMatchesFilter(row, f('lint')), false);
-  assert.equal(rowMatchesFilter(row, f('unit', true)), true);
-  assert.equal(rowMatchesFilter({ ...row, status: 'success' }, f('', true)), false);
+  assert.equal(rowMatchesFilter(row, f('unit', 'failed')), true);
+  assert.equal(rowMatchesFilter({ ...row, status: 'success' }, f('', 'failed')), false);
   // A trigger job counts as failed when its downstream pipeline failed.
   assert.equal(
-    rowMatchesFilter({ name: 'deploy', status: 'success', dsStatus: 'failed' }, f('', true)),
+    rowMatchesFilter({ name: 'deploy', status: 'success', dsStatus: 'failed' }, f('', 'failed')),
     true,
+  );
+
+  // "Running" also covers queued jobs; selected groups are OR-combined.
+  assert.equal(rowMatchesFilter({ ...row, status: 'pending' }, f('', 'running')), true);
+  assert.equal(rowMatchesFilter({ ...row, status: 'manual' }, f('', 'running')), false);
+  assert.equal(rowMatchesFilter(row, f('', 'running')), false);
+  assert.equal(rowMatchesFilter(row, f('', 'failed', 'running')), true);
+  assert.equal(rowMatchesFilter({ ...row, status: 'running' }, f('', 'failed', 'running')), true);
+  assert.equal(rowMatchesFilter({ ...row, status: 'success' }, f('', 'failed', 'running')), false);
+  assert.equal(
+    rowMatchesFilter({ name: 'deploy', status: 'running', dsStatus: 'running' }, f('lint', 'running')),
+    false,
   );
 });
 
