@@ -891,10 +891,10 @@
     if (dp) {
       const expandRow = el('tr', 'glpv-ds-row');
       expandRow.hidden = true;
-      expandRow.appendChild(el('td'));
 
+      // Spans the status column too, so each nesting level only indents a little.
       const tdContent = el('td', 'glpv-ds-cell');
-      tdContent.colSpan = 4;
+      tdContent.colSpan = 5;
       const contentDiv = el('div', 'glpv-ds-content');
       tdContent.appendChild(contentDiv);
       expandRow.appendChild(tdContent);
